@@ -1,0 +1,76 @@
+name: Release Tauri App
+
+on:
+  push:
+    tags:
+      - 'v*' # 当推送标签以 'v' 开头时触发，例如 v0.1.0
+  workflow_dispatch: # 允许在 GitHub Actions 页面手动触发
+
+jobs:
+  release:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            platform: linux
+            args: ''
+          - os: windows-latest
+            platform: windows
+            args: ''
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Linux 系统依赖 (仅 Ubuntu)
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: 设置 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: 安装 pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: 安装前端依赖
+        run: pnpm install
+
+      - name: 设置 Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          # Tauri v2 需要
+          targets: ${{ matrix.platform == 'macos' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - name: 配置 Rust 缓存
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - name: 构建目标客户端并发布
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          # `tauri-action` 能够自动读取 `tauri.conf.json` 中的版本号，并处理发布
+          tagName: app-v__VERSION__
+          releaseName: 'Avocado FRP v__VERSION__'
+          releaseBody: |
+            ## Avocado FRP 客户端更新 🚀
+            
+            自动构建的 Release 版本。请在下方资产列表中下载对应平台的安装包：
+            
+            - **Windows**: 下载 `.msi` 或 `.exe` 文件
+            - **Linux**: 下载 `.AppImage` (免安装应用) 或 `.deb`
+            
+          releaseDraft: true # 设置为 true 会创建为草稿，方便你自己检查后再发布；如果想直接发布设为 false
+          prerelease: false
+          args: ${{ matrix.args }}
