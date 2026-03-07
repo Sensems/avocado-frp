@@ -1,0 +1,40 @@
+{
+  "name": "avocado-frp",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-autostart": "^2.5.1",
+    "@tauri-apps/plugin-dialog": "^2.6.0",
+    "@tauri-apps/plugin-opener": "^2",
+    "@vicons/ionicons5": "^0.13.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "echarts": "^6.0.0",
+    "lucide-vue-next": "^0.577.0",
+    "naive-ui": "^2.43.2",
+    "pinia": "^3.0.4",
+    "radix-vue": "^1.9.17",
+    "smol-toml": "^1.6.0",
+    "tailwind-merge": "^3.5.0",
+    "vfonts": "^0.0.3",
+    "vue": "^3.5.13",
+    "vue-i18n": "^11.2.8",
+    "vue-router": "^5.0.3"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2",
+    "@types/node": "^25.3.5",
+    "@vitejs/plugin-vue": "^5.2.1",
+    "typescript": "~5.6.2",
+    "vite": "^6.0.3",
+    "vue-tsc": "^2.1.10"
+  }
+}
