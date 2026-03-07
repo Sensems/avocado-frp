@@ -27,4 +27,6 @@ sysinfo = "0.38.3"
 tauri-plugin-autostart = "2.5.1"
 tauri-plugin-shell = "2.3.5"
 tauri-plugin-dialog = "2"
+chrono = "0.4.38"
+reqwest = "0.12.0"
 

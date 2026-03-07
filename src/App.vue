@@ -1,16 +1,22 @@
 <script setup lang="ts">
 import { darkTheme, createDiscreteApi } from 'naive-ui'
 import type { GlobalThemeOverrides } from 'naive-ui'
-import { computed, watch } from 'vue'
+import { computed, watch, onMounted } from 'vue'
 import { useTheme } from '@/composables/useTheme'
 import { useProcessStatus } from '@/composables/useProcessStatus'
+import { useAppLogs } from '@/composables/useAppLogs'
 import { useI18n } from 'vue-i18n'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { Sun, Moon, Monitor, Languages, Minus, X, Maximize2 } from 'lucide-vue-next'
 
 const { isDark, themeMode, cycleTheme } = useTheme()
 const { frpcRunning, frpsRunning } = useProcessStatus()
+const { initListeners } = useAppLogs()
 const { locale, t } = useI18n()
+
+onMounted(() => {
+  initListeners()
+})
 
 const theme = computed(() => (isDark.value ? darkTheme : null))
 

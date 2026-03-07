@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
+import { invoke } from '@tauri-apps/api/core'
 import * as echarts from 'echarts'
 
 const chartRef = ref<HTMLElement | null>(null)
@@ -10,6 +11,8 @@ const upData = ref<number[]>([])
 const downData = ref<number[]>([])
 
 let timer: any = null
+let lastTotalIn = 0
+let lastTotalOut = 0
 
 const initChart = () => {
     if (chartRef.value) {
@@ -82,24 +85,40 @@ const initChart = () => {
 const fetchTrafficData = async () => {
     timer = setInterval(async () => {
         try {
-            const response = await fetch('http://127.0.0.1:7400/api/status')
-            if (!response.ok) return
+            const responseText = await invoke<string>('get_frpc_traffic')
+            if (!responseText) return
 
-            const data = await response.json()
+            const data = JSON.parse(responseText)
             const now = new Date().toLocaleTimeString('en-US', { hour12: false })
 
-            let totalIn = 0
-            let totalOut = 0
+            let currentTotalIn = 0
+            let currentTotalOut = 0
 
-            if (data?.tcp) {
-                data.tcp.forEach((p: any) => {
-                    totalIn += p.today_traffic_in || 0
-                    totalOut += p.today_traffic_out || 0
-                })
+            // 遍历所有可能的协议类型 (tcp, udp, http, https, stcp, xtcp, tcpmux)
+            const protocols = Object.keys(data)
+            protocols.forEach((proto) => {
+                if (Array.isArray(data[proto])) {
+                    data[proto].forEach((p: any) => {
+                        currentTotalIn += p.today_traffic_in || 0
+                        currentTotalOut += p.today_traffic_out || 0
+                    })
+                }
+            })
+
+            // 计算增量 (除以 2 因为定时器是 2 秒)
+            // 第一次获取时，不计算极大的速度，而是直接置0
+            let upSpeed = 0
+            let downSpeed = 0
+
+            if (lastTotalIn > 0 || lastTotalOut > 0) {
+                // byte/s -> KB/s
+                upSpeed = Math.max(0, (currentTotalOut - lastTotalOut) / 2 / 1024)
+                downSpeed = Math.max(0, (currentTotalIn - lastTotalIn) / 2 / 1024)
             }
 
-            const upSpeed = totalOut / 1024
-            const downSpeed = totalIn / 1024
+            // 更新上一次的数据以便下次计算
+            lastTotalIn = currentTotalIn
+            lastTotalOut = currentTotalOut
 
             xData.value.push(now)
             upData.value.push(Number(upSpeed.toFixed(2)))

@@ -1,22 +1,13 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
-import { listen, type UnlistenFn } from '@tauri-apps/api/event'
+import { ref, watch, nextTick } from 'vue'
 import { Trash2 } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
+import { useAppLogs, type LogEntry } from '@/composables/useAppLogs'
 
 const { t } = useI18n()
 
-interface LogEntry {
-    type: 'out' | 'err'
-    source: 'frpc' | 'frps'
-    text: string
-    time: string
-}
-
-const logs = ref<LogEntry[]>([])
+const { logs, clearLogs } = useAppLogs()
 const containerRef = ref<HTMLElement | null>(null)
-
-const unlisteners: UnlistenFn[] = []
 
 const scrollToBottom = () => {
     nextTick(() => {
@@ -26,51 +17,10 @@ const scrollToBottom = () => {
     })
 }
 
-const addLog = (type: 'out' | 'err', source: 'frpc' | 'frps', text: string) => {
-    logs.value.push({
-        type,
-        source,
-        text,
-        time: new Date().toLocaleTimeString()
-    })
-    if (logs.value.length > 500) {
-        logs.value.shift()
-    }
+// Watch logs array length and scroll when it changes
+watch(() => logs.value.length, () => {
     scrollToBottom()
-}
-
-onMounted(async () => {
-    // frpc 事件
-    unlisteners.push(
-        await listen<string>('frpc-stdout', (event) => {
-            addLog('out', 'frpc', event.payload)
-        }),
-        await listen<string>('frpc-stderr', (event) => {
-            addLog('err', 'frpc', event.payload)
-        }),
-        await listen<number>('frpc-terminated', (event) => {
-            addLog('err', 'frpc', `进程已退出，退出码: ${event.payload}`)
-        }),
-        // frps 事件
-        await listen<string>('frps-stdout', (event) => {
-            addLog('out', 'frps', event.payload)
-        }),
-        await listen<string>('frps-stderr', (event) => {
-            addLog('err', 'frps', event.payload)
-        }),
-        await listen<number>('frps-terminated', (event) => {
-            addLog('err', 'frps', `进程已退出，退出码: ${event.payload}`)
-        }),
-    )
 })
-
-onUnmounted(() => {
-    unlisteners.forEach((fn) => fn())
-})
-
-const clearLogs = () => {
-    logs.value = []
-}
 
 /** 根据日志内容返回左侧竖条颜色类名 */
 const getLogBorderClass = (log: LogEntry) => {
@@ -128,18 +78,18 @@ const getSourceBadgeClass = (source: string) => {
                     <line x1="12" y1="19" x2="20" y2="19" />
                 </svg>
                 <span class="text-slate-600 text-xs">{{ t('forms.cancel') === '取消' ? '等待输出...' : 'Waiting for output...'
-                    }}</span>
+                }}</span>
             </div>
 
             <!-- Log Lines -->
             <div v-for="(log, idx) in logs" :key="idx"
                 :class="['py-[2px] break-all border-l-2 pl-3 transition-colors flex items-start gap-1.5', getLogBorderClass(log), getLogTextClass(log)]">
                 <span class="text-slate-600 select-none mr-1 text-[10px] shrink-0">{{ String(idx + 1).padStart(3, ' ')
-                    }}</span>
+                }}</span>
                 <span class="text-slate-700 select-none mr-1 shrink-0">[{{ log.time }}]</span>
                 <span
                     :class="['text-[9px] font-semibold px-1 py-[1px] rounded shrink-0', getSourceBadgeClass(log.source)]">{{
-                    log.source }}</span>
+                        log.source }}</span>
                 <span>{{ log.text }}</span>
             </div>
         </div>

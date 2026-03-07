@@ -45,19 +45,42 @@ pub fn start_frpc(app: AppHandle) -> Result<String, String> {
 
     let app_handle = app.clone();
     tauri::async_runtime::spawn(async move {
+        let config_dir_res = super::config_parser::get_config_dir(&app_handle);
+        let mut log_writer = None;
+        if let Ok(c_dir) = config_dir_res {
+            let log_dir = c_dir.join("logs");
+            let _ = std::fs::create_dir_all(&log_dir);
+            if let Ok(file) = std::fs::OpenOptions::new().create(true).append(true).open(log_dir.join("frpc.log")) {
+                log_writer = Some(file);
+            }
+        }
+        
+        use std::io::Write;
+        
         while let Some(event) = rx.recv().await {
             match event {
                 CommandEvent::Stdout(line) => {
-                    let _ = app_handle.emit("frpc-stdout", String::from_utf8_lossy(&line).to_string());
+                    let text = String::from_utf8_lossy(&line).to_string();
+                    let _ = app_handle.emit("frpc-stdout", text.clone());
+                    if let Some(mut file) = log_writer.as_ref() {
+                        let _ = writeln!(file, "[{}] {}", chrono::Local::now().format("%Y-%m-%d %H:%M:%S"), text);
+                    }
                 }
                 CommandEvent::Stderr(line) => {
-                    let _ = app_handle.emit("frpc-stderr", String::from_utf8_lossy(&line).to_string());
+                    let text = String::from_utf8_lossy(&line).to_string();
+                    let _ = app_handle.emit("frpc-stderr", text.clone());
+                    if let Some(mut file) = log_writer.as_ref() {
+                        let _ = writeln!(file, "[{}] ERROR: {}", chrono::Local::now().format("%Y-%m-%d %H:%M:%S"), text);
+                    }
                 }
                 CommandEvent::Terminated(payload) => {
                     // 进程退出后自动清理状态
                     let state = app_handle.state::<AppState>();
                     *state.frpc_process.lock().unwrap() = None;
                     let _ = app_handle.emit("frpc-terminated", payload.code);
+                    if let Some(mut file) = log_writer.as_ref() {
+                        let _ = writeln!(file, "[{}] 进程已退出，退出码: {}", chrono::Local::now().format("%Y-%m-%d %H:%M:%S"), payload.code.unwrap_or(0));
+                    }
                     break;
                 }
                 _ => {}
@@ -105,19 +128,42 @@ pub fn start_frps(app: AppHandle) -> Result<String, String> {
 
     let app_handle = app.clone();
     tauri::async_runtime::spawn(async move {
+        let config_dir_res = super::config_parser::get_config_dir(&app_handle);
+        let mut log_writer = None;
+        if let Ok(c_dir) = config_dir_res {
+            let log_dir = c_dir.join("logs");
+            let _ = std::fs::create_dir_all(&log_dir);
+            if let Ok(file) = std::fs::OpenOptions::new().create(true).append(true).open(log_dir.join("frps.log")) {
+                log_writer = Some(file);
+            }
+        }
+        
+        use std::io::Write;
+
         while let Some(event) = rx.recv().await {
             match event {
                 CommandEvent::Stdout(line) => {
-                    let _ = app_handle.emit("frps-stdout", String::from_utf8_lossy(&line).to_string());
+                    let text = String::from_utf8_lossy(&line).to_string();
+                    let _ = app_handle.emit("frps-stdout", text.clone());
+                    if let Some(mut file) = log_writer.as_ref() {
+                        let _ = writeln!(file, "[{}] {}", chrono::Local::now().format("%Y-%m-%d %H:%M:%S"), text);
+                    }
                 }
                 CommandEvent::Stderr(line) => {
-                    let _ = app_handle.emit("frps-stderr", String::from_utf8_lossy(&line).to_string());
+                    let text = String::from_utf8_lossy(&line).to_string();
+                    let _ = app_handle.emit("frps-stderr", text.clone());
+                    if let Some(mut file) = log_writer.as_ref() {
+                        let _ = writeln!(file, "[{}] ERROR: {}", chrono::Local::now().format("%Y-%m-%d %H:%M:%S"), text);
+                    }
                 }
                 CommandEvent::Terminated(payload) => {
                     // 进程退出后自动清理状态
                     let state = app_handle.state::<AppState>();
                     *state.frps_process.lock().unwrap() = None;
                     let _ = app_handle.emit("frps-terminated", payload.code);
+                    if let Some(mut file) = log_writer.as_ref() {
+                        let _ = writeln!(file, "[{}] 进程已退出，退出码: {}", chrono::Local::now().format("%Y-%m-%d %H:%M:%S"), payload.code.unwrap_or(0));
+                    }
                     break;
                 }
                 _ => {}
@@ -139,5 +185,15 @@ pub fn stop_frps(app: AppHandle) -> Result<String, String> {
     }
 
     Ok("当前没有运行的 frps 进程".to_string())
+}
+
+#[tauri::command]
+pub async fn get_frpc_traffic() -> Result<String, String> {
+    reqwest::get("http://127.0.0.1:7400/api/status")
+        .await
+        .map_err(|e| format!("请求失败: {}", e))?
+        .text()
+        .await
+        .map_err(|e| format!("读取内容失败: {}", e))
 }
 

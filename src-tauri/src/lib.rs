@@ -110,6 +110,20 @@ pub fn run() {
                     }
                     _ => {}
                 })
+                .on_tray_icon_event(|tray, event| {
+                    use tauri::tray::TrayIconEvent;
+                    if let TrayIconEvent::Click {
+                        button: tauri::tray::MouseButton::Left,
+                        button_state: tauri::tray::MouseButtonState::Up,
+                        ..
+                    } = event
+                    {
+                        if let Some(window) = tray.app_handle().get_webview_window("main") {
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                        }
+                    }
+                })
                 .build(app)?;
             Ok(())
         })
@@ -131,6 +145,7 @@ pub fn run() {
             process_manager::stop_frps,
             process_manager::get_frpc_status,
             process_manager::get_frps_status,
+            process_manager::get_frpc_traffic,
             export_deploy_script,
             export_logs,
         ])

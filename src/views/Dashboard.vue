@@ -6,12 +6,14 @@ import { useI18n } from 'vue-i18n'
 import { parse, stringify } from 'smol-toml'
 import ProtocolForm from '@/components/ProtocolForm.vue'
 import FrpsConfigForm from '@/components/FrpsConfigForm.vue'
+import FrpcConfigForm from '@/components/FrpcConfigForm.vue'
 import ConsoleLogger from '@/components/ConsoleLogger.vue'
 import TrafficChart from '@/components/TrafficChart.vue'
 import HelpGuide from '@/components/HelpGuide.vue'
 import { useProcessStatus } from '@/composables/useProcessStatus'
 import { isEnabled, enable, disable } from '@tauri-apps/plugin-autostart'
-import { open } from '@tauri-apps/plugin-dialog'
+import { open as openDialog } from '@tauri-apps/plugin-dialog'
+import { openUrl } from '@tauri-apps/plugin-opener'
 import {
     Play,
     Square,
@@ -27,7 +29,8 @@ import {
     BookOpen,
     Download,
     Edit2,
-    Trash2
+    Trash2,
+    ExternalLink
 } from 'lucide-vue-next'
 
 const { t } = useI18n()
@@ -148,7 +151,7 @@ const handleStopFrps = async () => {
 
 const handleExportDeploy = async () => {
     try {
-        const selectedDir = await open({
+        const selectedDir = await openDialog({
             directory: true,
             multiple: false,
             title: '选择导出部署脚本存储目录'
@@ -166,7 +169,7 @@ const handleExportDeploy = async () => {
 /** 导出日志 */
 const handleExportLogs = async () => {
     try {
-        const selectedDir = await open({
+        const selectedDir = await openDialog({
             directory: true,
             multiple: false,
             title: '选择日志导出目录'
@@ -248,6 +251,34 @@ const handleSaveRule = async (payload: any) => {
     }
 }
 
+const handleSaveFrpcGlobal = async (configData: any) => {
+    try {
+        let configObj: any = parsedFrpcConfig.value || {}
+
+        configObj.serverAddr = configData.serverAddr
+        configObj.serverPort = Number(configData.serverPort)
+        configObj.auth = {
+            method: configData.authMethod,
+            token: configData.token
+        }
+
+        // 默认开启本地 api 服务以便流量图表能够获取数据
+        if (!configObj.webServer) {
+            configObj.webServer = {}
+        }
+        configObj.webServer.addr = '127.0.0.1'
+        configObj.webServer.port = 7400
+
+        const updatedConfigStr = stringify(configObj)
+        await invoke('save_frpc_config', { configContent: updatedConfigStr })
+        await loadFrpcConfig()
+        message.success(t('feedback.saveSuccess', '客户端全局配置已保存'))
+    } catch (e: any) {
+        console.error(t('feedback.saveFail', e.message))
+        message.error(t('feedback.saveFail', e.message))
+    }
+}
+
 const handleSaveFrpsForm = async (configData: Record<string, string | number>) => {
     const tomlContent = `
 bindPort = ${configData.bindPort}
@@ -267,6 +298,25 @@ webServer.password = "${configData.dashboardPwd}"
     } catch (e) {
         console.error('保存Frps失败:', e)
         message.error(String(e))
+    }
+}
+
+const handleJump = (proxy: any) => {
+    try {
+        let url = ''
+        if (['http', 'https'].includes(String(proxy.type))) {
+            const domain = proxy.customDomains?.[0] || '127.0.0.1'
+            url = `${proxy.type}://${domain}`
+        } else if (['tcp'].includes(String(proxy.type))) {
+            const serverIp = parsedFrpcConfig.value?.serverAddr || '127.0.0.1'
+            url = `http://${serverIp}:${proxy.remotePort}`
+        } else {
+            const serverIp = parsedFrpcConfig.value?.serverAddr || '127.0.0.1'
+            url = `${proxy.type}://${serverIp}:${proxy.remotePort}`
+        }
+        openUrl(url)
+    } catch (e) {
+        console.error('跳转失败:', e)
     }
 }
 
@@ -297,6 +347,22 @@ onMounted(() => {
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
                     <!-- Left Column -->
                     <div class="col-span-1 lg:col-span-2 flex flex-col gap-5">
+
+                        <!-- Global Config -->
+                        <n-card class="glass-card" size="medium">
+                            <template #header>
+                                <div class="flex items-center gap-2.5">
+                                    <div
+                                        class="w-8 h-8 rounded-lg flex items-center justify-center bg-sky-500/10 border border-sky-500/20">
+                                        <Settings :size="16" class="text-sky-400" />
+                                    </div>
+                                    <span class="text-sm font-semibold">{{ $t('dashboard.globalConfig', '全局连接配置')
+                                        }}</span>
+                                </div>
+                            </template>
+                            <FrpcConfigForm :initial-data="parsedFrpcConfig" @save="handleSaveFrpcGlobal" />
+                        </n-card>
+
                         <!-- Connection Profile -->
                         <n-card class="glass-card" size="medium">
                             <template #header>
@@ -344,8 +410,15 @@ onMounted(() => {
                                             </div>
                                             <div
                                                 class="flex items-center gap-1 opacity-100 lg:opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <n-button circle size="small" tertiary type="primary"
+                                                    @click="handleJump(proxy)" class="cursor-pointer" title="在新窗口打开">
+                                                    <template #icon>
+                                                        <ExternalLink :size="14" />
+                                                    </template>
+                                                </n-button>
                                                 <n-button circle size="small" tertiary type="info"
-                                                    @click="handleEditRule(proxy, Number(idx))" class="cursor-pointer">
+                                                    @click="handleEditRule(proxy, Number(idx))" class="cursor-pointer"
+                                                    title="编辑规则">
                                                     <template #icon>
                                                         <Edit2 :size="14" />
                                                     </template>
