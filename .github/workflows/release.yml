@@ -18,6 +18,12 @@ jobs:
           - os: windows-latest
             platform: windows
             args: ''
+          - os: macos-latest
+            platform: macos
+            args: '--target x86_64-apple-darwin'
+          - os: macos-latest
+            platform: macos
+            args: '--target aarch64-apple-darwin'
 
     runs-on: ${{ matrix.os }}
 
@@ -69,6 +75,7 @@ jobs:
             自动构建的 Release 版本。请在下方资产列表中下载对应平台的安装包：
             
             - **Windows**: 下载 `.msi` 或 `.exe` 文件
+            - **macOS**: 下载 `.dmg` 文件 (包含 Intel 与 M 系列芯片双架构支持)
             - **Linux**: 下载 `.AppImage` (免安装应用) 或 `.deb`
             
           releaseDraft: true # 设置为 true 会创建为草稿，方便你自己检查后再发布；如果想直接发布设为 false
