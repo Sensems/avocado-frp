@@ -157,18 +157,7 @@ const handleClose = () => {
           ]">
           <!-- Left: Logo + App Name -->
           <div class="flex items-center gap-2.5">
-            <div class="w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-300" :class="[
-              isDark
-                ? 'bg-emerald-500/10 border border-emerald-500/20'
-                : 'bg-emerald-50 border border-emerald-200'
-            ]">
-              <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 text-emerald-500" viewBox="0 0 24 24"
-                fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                <path d="M2 17l10 5 10-5" />
-                <path d="M2 12l10 5 10-5" />
-              </svg>
-            </div>
+            <img src="@/assets/logo.png" alt="Logo" class="w-7 h-7 drop-shadow-sm" />
             <h1 class="text-[13px] font-bold tracking-wide" :class="isDark ? 'text-slate-200' : 'text-slate-800'">
               Avocado FRP
             </h1>

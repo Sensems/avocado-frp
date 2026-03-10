@@ -20,10 +20,7 @@ jobs:
             args: ''
           - os: macos-latest
             platform: macos
-            args: '--target x86_64-apple-darwin'
-          - os: macos-latest
-            platform: macos
-            args: '--target aarch64-apple-darwin'
+            args: '--target aarch64-apple-darwin --target x86_64-apple-darwin'
 
     runs-on: ${{ matrix.os }}
 
