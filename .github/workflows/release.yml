@@ -67,7 +67,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           # `tauri-action` 能够自动读取 `tauri.conf.json` 中的版本号，并处理发布
-          tagName: app-v__VERSION__
+          tagName: v__VERSION__
           releaseName: 'Avocado FRP v__VERSION__'
           releaseBody: |
             ## Avocado FRP 客户端更新 🚀
