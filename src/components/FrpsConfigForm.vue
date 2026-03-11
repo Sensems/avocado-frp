@@ -7,14 +7,14 @@ const props = defineProps<{
 }>()
 
 const form = ref({
-    bindPort: props.initialData?.bindPort || 7000,
+    bindPort: props.initialData?.bindPort || '',
     vhostHttpPort: props.initialData?.vhostHttpPort || '',
     vhostHttpsPort: props.initialData?.vhostHttpsPort || '',
-    authMethod: props.initialData?.authMethod || 'token',
+    authMethod: props.initialData?.authMethod || '',
     token: props.initialData?.token || '',
-    dashboardPort: props.initialData?.dashboardPort || 7500,
-    dashboardUser: props.initialData?.dashboardUser || 'admin',
-    dashboardPwd: props.initialData?.dashboardPwd || 'admin',
+    dashboardPort: props.initialData?.dashboardPort || null,
+    dashboardUser: props.initialData?.dashboardUser || '',
+    dashboardPwd: props.initialData?.dashboardPwd || '',
 })
 
 const emit = defineEmits(['save'])

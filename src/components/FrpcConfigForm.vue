@@ -7,17 +7,17 @@ const props = defineProps<{
 }>()
 
 const form = ref({
-    serverAddr: props.initialData?.serverAddr || '127.0.0.1',
-    serverPort: props.initialData?.serverPort || 7000,
-    authMethod: props.initialData?.auth?.method || 'token',
+    serverAddr: props.initialData?.serverAddr || '',
+    serverPort: props.initialData?.serverPort || '',
+    authMethod: props.initialData?.auth?.method || null,
     token: props.initialData?.auth?.token || '',
 })
 
 watch(() => props.initialData, (newVal) => {
     if (newVal) {
-        form.value.serverAddr = newVal.serverAddr || '127.0.0.1'
-        form.value.serverPort = newVal.serverPort || 7000
-        form.value.authMethod = newVal.auth?.method || 'token'
+        form.value.serverAddr = newVal.serverAddr || ''
+        form.value.serverPort = newVal.serverPort || ''
+        form.value.authMethod = newVal.auth?.method || null
         form.value.token = newVal.auth?.token || ''
     }
 }, { deep: true, immediate: true })
@@ -44,7 +44,8 @@ const handleSave = () => {
 
             <div class="grid grid-cols-2 gap-5">
                 <n-form-item :label="$t('forms.authMethod', '认证方式')" path="authMethod">
-                    <n-select v-model:value="form.authMethod" :options="[{ label: 'Token', value: 'token' }]" />
+                    <n-select v-model:value="form.authMethod" placeholder="请选择认证方式"
+                        :options="[{ label: 'Token', value: 'token' }]" />
                 </n-form-item>
                 <n-form-item :label="$t('forms.authToken', '认证 Token')" path="token">
                     <n-input v-model:value="form.token" type="password" show-password-on="click"

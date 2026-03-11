@@ -5,8 +5,13 @@ use toml_edit::DocumentMut;
 
 pub fn get_config_dir(app: &AppHandle) -> Result<PathBuf, String> {
     let resolver = app.path();
-    let config_dir = resolver.app_config_dir()
+    let mut config_dir = resolver.app_config_dir()
         .map_err(|e| format!("无法获取应用配置目录: {}", e))?;
+        
+    #[cfg(debug_assertions)]
+    {
+        config_dir = config_dir.join("dev_data");
+    }
     
     if !config_dir.exists() {
         fs::create_dir_all(&config_dir)

@@ -158,7 +158,8 @@ const handleClose = () => {
           <!-- Left: Logo + App Name -->
           <div class="flex items-center gap-2.5">
             <img src="@/assets/logo.png" alt="Logo" class="w-7 h-7 drop-shadow-sm" />
-            <h1 class="text-[13px] font-bold tracking-wide" :class="isDark ? 'text-slate-200' : 'text-slate-800'">
+            <h1 class="text-[14px] font-bold tracking-wide leading-1"
+              :class="isDark ? 'text-slate-200' : 'text-slate-800'">
               Avocado FRP
             </h1>
           </div>
