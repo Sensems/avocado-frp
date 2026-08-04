@@ -1,0 +1,3 @@
+# Updater signing private keys — never commit.
+# Public keys (*.key.pub) are safe to commit and may be mirrored in tauri.conf.json.
+*.key

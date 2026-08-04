@@ -31,7 +31,7 @@ import { useLogsStore } from '@/stores/logs'
 import { useProcessStore } from '@/stores/process'
 
 const RECENT_LOG_LIMIT = 12
-const FRP_SAMPLE_VERSION = '0.61.1'
+const FRP_SAMPLE_VERSION = '0.67.0'
 
 const { t } = useI18n()
 const message = useMessage()

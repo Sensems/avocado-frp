@@ -1,5 +1,10 @@
 import { invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
+import {
+  check as checkUpdater,
+  type DownloadEvent,
+  type Update,
+} from '@tauri-apps/plugin-updater'
 
 import type {
   ConfigChangeRequest,
@@ -24,6 +29,11 @@ import type {
   FrpcTrafficResult,
 } from '@/domain/monitor'
 import type { AppSettings, AppSettingsPatch } from '@/domain/settings'
+import type {
+  AvailableUpdate,
+  UpdateDownloadProgress,
+} from '@/domain/updater'
+import { mapUpdateError } from '@/services/errorMapper'
 
 type ConfigSnapshotFor<K extends ConfigKind> = K extends 'frpc'
   ? FrpcConfigSnapshot
@@ -143,6 +153,95 @@ const onLogEntry = (
     listener(event.payload)
   })
 
+/** Held after a successful check so install does not re-expose plugin types. */
+let pendingUpdate: Update | null = null
+
+type UpdaterStateListener = (progress: UpdateDownloadProgress | null) => void
+const updaterProgressListeners = new Set<UpdaterStateListener>()
+
+const toAvailableUpdate = (update: Update): AvailableUpdate => ({
+  currentVersion: update.currentVersion,
+  version: update.version,
+  body: update.body,
+  date: update.date,
+})
+
+const notifyUpdaterProgress = (progress: UpdateDownloadProgress | null) => {
+  for (const listener of updaterProgressListeners) {
+    listener(progress)
+  }
+}
+
+/** Check for updates. Returns null when already up to date. */
+const checkForUpdates = async (): Promise<AvailableUpdate | null> => {
+  try {
+    if (pendingUpdate) {
+      await pendingUpdate.close().catch(() => undefined)
+      pendingUpdate = null
+    }
+    const update = await checkUpdater()
+    pendingUpdate = update
+    return update ? toAvailableUpdate(update) : null
+  } catch (error) {
+    pendingUpdate = null
+    throw mapUpdateError(error)
+  }
+}
+
+/**
+ * Download and install the update from the last successful `checkForUpdates`.
+ * Call `prepareShutdown` / stop sidecars before this when the user confirms.
+ */
+const downloadAndInstallUpdate = async (
+  onProgress?: (progress: UpdateDownloadProgress) => void,
+): Promise<void> => {
+  if (!pendingUpdate) {
+    throw mapUpdateError(
+      new Error('No pending update. Check for updates before installing.'),
+    )
+  }
+
+  let downloadedBytes = 0
+  let contentLength: number | undefined
+
+  const handleEvent = (event: DownloadEvent) => {
+    if (event.event === 'Started') {
+      downloadedBytes = 0
+      contentLength = event.data.contentLength
+    } else if (event.event === 'Progress') {
+      downloadedBytes += event.data.chunkLength
+    }
+
+    const progress: UpdateDownloadProgress = {
+      downloadedBytes,
+      contentLength,
+      percent:
+        contentLength && contentLength > 0
+          ? Math.min(100, Math.round((downloadedBytes / contentLength) * 100))
+          : undefined,
+    }
+    onProgress?.(progress)
+    notifyUpdaterProgress(progress)
+  }
+
+  try {
+    await pendingUpdate.downloadAndInstall(handleEvent)
+    notifyUpdaterProgress(null)
+  } catch (error) {
+    throw mapUpdateError(error)
+  }
+}
+
+/** Progress listener for download/install (in-process; not a Tauri event). */
+const onUpdaterStateChanged = (
+  listener: UpdaterStateListener,
+): (() => void) => {
+  updaterProgressListeners.add(listener)
+  return () => {
+    updaterProgressListeners.delete(listener)
+  }
+}
+
 export const tauriClient = {
   getConfigSnapshot,
   validateConfigSource,
@@ -165,6 +264,9 @@ export const tauriClient = {
   applyLocalMonitor,
   runDiagnostics,
   exportDiagnosticsPack,
+  checkForUpdates,
+  downloadAndInstallUpdate,
+  onUpdaterStateChanged,
   onProcessStateChanged,
   onConfigChanged,
   onLogEntry,

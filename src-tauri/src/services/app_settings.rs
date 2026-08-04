@@ -2,7 +2,9 @@ use std::net::IpAddr;
 use std::path::PathBuf;
 use std::sync::Mutex;
 
-use crate::adapters::filesystem::{map_config_io, AppPaths, ConfigFilesystem, RealConfigFilesystem};
+use crate::adapters::filesystem::{
+    map_config_io, AppPaths, ConfigFilesystem, RealConfigFilesystem,
+};
 use crate::domain::error::{CommandError, ErrorCode};
 use crate::domain::settings::{
     AppSettings, AppSettingsPatch, LocalMonitorPrefsPatch, LogPolicyPatch, MAX_MAX_FILE_BYTES,
@@ -72,6 +74,9 @@ fn apply_patch(settings: &mut AppSettings, patch: AppSettingsPatch) -> Result<()
     }
     if let Some(shown) = patch.log_policy_notice_shown {
         settings.log_policy_notice_shown = shown;
+    }
+    if let Some(check_on_launch) = patch.check_updates_on_launch {
+        settings.check_updates_on_launch = check_on_launch;
     }
     Ok(())
 }

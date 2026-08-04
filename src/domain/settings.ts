@@ -18,6 +18,8 @@ export interface AppSettings {
   logPolicy: LogPolicy
   localMonitor: LocalMonitorPrefs
   logPolicyNoticeShown: boolean
+  /** When true, App silently checks for updates on launch (never auto-installs). */
+  checkUpdatesOnLaunch: boolean
 }
 
 export interface LogPolicyPatch {
@@ -39,4 +41,5 @@ export interface AppSettingsPatch {
   logPolicy?: LogPolicyPatch
   localMonitor?: LocalMonitorPrefsPatch
   logPolicyNoticeShown?: boolean
+  checkUpdatesOnLaunch?: boolean
 }

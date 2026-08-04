@@ -11,6 +11,8 @@
     "shell:default",
     "autostart:default",
     "dialog:default",
+    "updater:default",
+    "process:default",
     "core:window:default",
     "core:window:allow-minimize",
     "core:window:allow-maximize",

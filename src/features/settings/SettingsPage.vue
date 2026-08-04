@@ -8,12 +8,14 @@ import {
   NCollapseItem,
   NInput,
   NInputNumber,
+  NProgress,
   NSelect,
   NSwitch,
   useDialog,
   useMessage,
 } from 'naive-ui'
 import { disable, enable, isEnabled } from '@tauri-apps/plugin-autostart'
+import { relaunch } from '@tauri-apps/plugin-process'
 
 import type { ConfigKind } from '@/domain/config'
 import { persistLocale, type SupportedLocale } from '@/lib/preferences'
@@ -24,10 +26,9 @@ import {
 import { useTheme } from '@/composables/useTheme'
 import { useConfigStore } from '@/stores/config'
 import { useProcessStore } from '@/stores/process'
+import { APP_VERSION } from '@/appVersion'
 import { useSettingsStore } from '@/stores/settings'
-
-/** Keep in sync with package.json / tauri.conf.json product version. */
-const APP_VERSION = '1.0.0'
+import { useUpdaterStore } from '@/stores/updater'
 const BYTES_PER_MB = 1024 * 1024
 const MIN_SIZE_MB = 1
 const MAX_SIZE_MB = 100
@@ -44,9 +45,17 @@ const dialog = useDialog()
 const configStore = useConfigStore()
 const processStore = useProcessStore()
 const settingsStore = useSettingsStore()
+const updaterStore = useUpdaterStore()
 const { frpc, frps } = storeToRefs(configStore)
 const { settings, loading: settingsLoading, saving: settingsSaving } =
   storeToRefs(settingsStore)
+const {
+  phase: updaterPhase,
+  available: availableUpdate,
+  progress: updateProgress,
+  busy: updaterBusy,
+  currentVersion: updaterCurrentVersion,
+} = storeToRefs(updaterStore)
 const { themeMode, setTheme } = useTheme()
 
 const autostartEnabled = ref(false)
@@ -60,6 +69,8 @@ const monitorPort = ref<number | null>(DEFAULT_MONITOR_PORT)
 const monitorUser = ref('')
 const monitorPassword = ref('')
 const monitorSaving = ref(false)
+const checkUpdatesOnLaunch = ref(true)
+const checkOnLaunchBusy = ref(false)
 
 const themeOptions = computed(() => [
   { label: t('theme.system'), value: 'system' },
@@ -150,6 +161,94 @@ const applySettingsToForm = () => {
     monitorPort.value = monitor.port || DEFAULT_MONITOR_PORT
     monitorUser.value = monitor.user ?? ''
     monitorPassword.value = monitor.password ?? ''
+  }
+  if (settings.value) {
+    checkUpdatesOnLaunch.value = settings.value.checkUpdatesOnLaunch
+  }
+}
+
+const updateStatusText = computed(() => {
+  switch (updaterPhase.value) {
+    case 'checking':
+      return t('settings.updateChecking')
+    case 'available':
+      return t('settings.updateAvailable', {
+        version: availableUpdate.value?.version ?? '',
+      })
+    case 'upToDate':
+      return t('settings.updateUpToDate')
+    case 'downloading':
+      return t('settings.updateDownloading')
+    case 'ready':
+      return t('settings.updateReady')
+    case 'error':
+      return t('settings.updateError')
+    default:
+      return t('settings.checkUpdatesDesc')
+  }
+})
+
+const onCheckUpdates = async () => {
+  try {
+    const result = await updaterStore.check()
+    if (result) {
+      message.success(
+        t('settings.updateAvailable', { version: result.version }),
+      )
+    } else {
+      message.success(t('settings.updateUpToDate'))
+    }
+  } catch (error) {
+    message.error(t(getCommandErrorI18nKey(normalizeCommandError(error))))
+  }
+}
+
+const confirmInstallUpdate = () => {
+  const update = availableUpdate.value
+  if (!update) {
+    message.warning(t('settings.updateNonePending'))
+    return
+  }
+
+  dialog.warning({
+    title: t('settings.updateInstallConfirmTitle'),
+    content: t('settings.updateInstallConfirmContent', {
+      version: update.version,
+    }),
+    positiveText: t('settings.updateInstallConfirm'),
+    negativeText: t('forms.cancel'),
+    onPositiveClick: () => void runInstallUpdate(),
+  })
+}
+
+const runInstallUpdate = async () => {
+  try {
+    await updaterStore.installAfterConfirm()
+    dialog.success({
+      title: t('settings.updateInstalledTitle'),
+      content: t('settings.updateInstalledContent'),
+      positiveText: t('settings.updateRestartNow'),
+      negativeText: t('forms.cancel'),
+      onPositiveClick: () => {
+        void relaunch()
+      },
+    })
+  } catch (error) {
+    message.error(t(getCommandErrorI18nKey(normalizeCommandError(error))))
+  }
+}
+
+const onCheckUpdatesOnLaunchChange = async (value: boolean) => {
+  checkOnLaunchBusy.value = true
+  checkUpdatesOnLaunch.value = value
+  try {
+    await settingsStore.update({ checkUpdatesOnLaunch: value })
+    message.success(t('settings.checkUpdatesOnLaunchSaved'))
+  } catch (error) {
+    checkUpdatesOnLaunch.value = settings.value?.checkUpdatesOnLaunch ?? true
+    message.error(t(getCommandErrorI18nKey(normalizeCommandError(error))))
+  } finally {
+    checkOnLaunchBusy.value = false
   }
 }
 
@@ -497,23 +596,96 @@ onMounted(() => {
       </div>
     </section>
 
-    <section class="ops-card ops-card--muted">
-      <h3 class="ops-card__title">
-        {{ t('settings.comingSoon') }}
-        <span class="settings-badge">WP5</span>
-      </h3>
+    <section class="ops-card">
+      <h3 class="ops-card__title">{{ t('settings.updates') }}</h3>
+      <p class="settings-section__hint">{{ t('settings.updatesHint') }}</p>
+      <div class="settings-row">
+        <div class="settings-row__text">
+          <div class="settings-row__label">{{ t('settings.currentVersion') }}</div>
+          <p class="settings-row__desc">
+            {{
+              t('settings.appVersion', {
+                version: updaterCurrentVersion || APP_VERSION,
+              })
+            }}
+          </p>
+        </div>
+      </div>
       <div class="settings-row">
         <div class="settings-row__text">
           <div class="settings-row__label">{{ t('settings.checkUpdates') }}</div>
-          <p class="settings-row__desc">{{ t('settings.checkUpdatesDesc') }}</p>
+          <p class="settings-row__desc">{{ updateStatusText }}</p>
+          <p
+            v-if="availableUpdate?.body"
+            class="settings-row__notes"
+          >
+            {{ availableUpdate.body }}
+          </p>
         </div>
-        <NButton
-          size="small"
-          disabled
-          :aria-label="t('settings.checkUpdates')"
-        >
-          {{ t('settings.wpPlaceholder') }}
-        </NButton>
+        <div class="settings-row__actions">
+          <NButton
+            size="small"
+            secondary
+            :loading="updaterBusy && updaterPhase === 'checking'"
+            :disabled="updaterBusy && updaterPhase !== 'checking'"
+            :aria-label="t('settings.checkUpdates')"
+            @click="onCheckUpdates"
+          >
+            {{ t('settings.checkUpdates') }}
+          </NButton>
+          <NButton
+            size="small"
+            type="primary"
+            :disabled="!availableUpdate || updaterBusy"
+            :loading="
+              updaterBusy &&
+              (updaterPhase === 'downloading' || updaterPhase === 'ready')
+            "
+            :aria-label="t('settings.installUpdate')"
+            @click="confirmInstallUpdate"
+          >
+            {{ t('settings.installUpdate') }}
+          </NButton>
+        </div>
+      </div>
+      <div
+        v-if="updateProgress && updaterPhase === 'downloading'"
+        class="settings-update-progress"
+      >
+        <NProgress
+          type="line"
+          :percentage="updateProgress.percent ?? 0"
+          :indicator-placement="'inside'"
+          :aria-label="t('settings.updateDownloading')"
+        />
+        <p class="settings-row__desc">
+          {{
+            updateProgress.percent !== undefined
+              ? t('settings.updateProgressPercent', {
+                  percent: updateProgress.percent,
+                })
+              : t('settings.updateProgressBytes', {
+                  bytes: updateProgress.downloadedBytes,
+                })
+          }}
+        </p>
+      </div>
+      <div class="settings-row">
+        <div class="settings-row__text">
+          <div class="settings-row__label">
+            {{ t('settings.checkUpdatesOnLaunch') }}
+          </div>
+          <p class="settings-row__desc">
+            {{ t('settings.checkUpdatesOnLaunchDesc') }}
+          </p>
+        </div>
+        <NSwitch
+          :value="checkUpdatesOnLaunch"
+          :loading="checkOnLaunchBusy"
+          :disabled="settingsLoading"
+          :aria-label="t('settings.checkUpdatesOnLaunch')"
+          @update:value="onCheckUpdatesOnLaunchChange"
+        />
       </div>
     </section>
 
@@ -609,10 +781,6 @@ onMounted(() => {
   gap: 12px;
 }
 
-.ops-card--muted {
-  opacity: 0.92;
-}
-
 .ops-card__title {
   margin: 0;
   font-size: 14px;
@@ -621,16 +789,6 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-}
-
-.settings-badge {
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  color: var(--ops-muted);
-  border: 1px solid var(--ops-border);
-  border-radius: 4px;
-  padding: 2px 6px;
 }
 
 .settings-section__hint {
@@ -671,6 +829,28 @@ onMounted(() => {
 
 .settings-row__control {
   width: 160px;
+}
+
+.settings-row__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.settings-row__notes {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--ops-text);
+  white-space: pre-wrap;
+  max-height: 120px;
+  overflow: auto;
+}
+
+.settings-update-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .settings-help-list {

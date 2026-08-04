@@ -12,9 +12,9 @@ const INSTALL_SCRIPT: &str = r#"#!/bin/bash
 echo "Installing frps..."
 mkdir -p /etc/frp
 cp frps.toml /etc/frp/frps.toml
-wget https://github.com/fatedier/frp/releases/download/v0.61.1/frp_0.61.1_linux_amd64.tar.gz -O /tmp/frp.tar.gz
+wget https://github.com/fatedier/frp/releases/download/v0.67.0/frp_0.67.0_linux_amd64.tar.gz -O /tmp/frp.tar.gz
 tar -zxvf /tmp/frp.tar.gz -C /tmp
-cp /tmp/frp_0.61.1_linux_amd64/frps /usr/bin/frps
+cp /tmp/frp_0.67.0_linux_amd64/frps /usr/bin/frps
 chmod +x /usr/bin/frps
 
 cat <<EOF > /etc/systemd/system/frps.service
@@ -79,7 +79,10 @@ pub async fn get_frpc_traffic(
         return Ok(FrpcTrafficResult::status_only(MonitorStatus::Disabled));
     }
 
-    let process = services.processes.snapshot(crate::domain::process::ProcessKind::Frpc).await;
+    let process = services
+        .processes
+        .snapshot(crate::domain::process::ProcessKind::Frpc)
+        .await;
     if !matches!(
         process.phase,
         ProcessPhase::Starting
@@ -87,7 +90,9 @@ pub async fn get_frpc_traffic(
             | ProcessPhase::Degraded
             | ProcessPhase::Stopping
     ) {
-        return Ok(FrpcTrafficResult::status_only(MonitorStatus::ProcessStopped));
+        return Ok(FrpcTrafficResult::status_only(
+            MonitorStatus::ProcessStopped,
+        ));
     }
 
     let snapshot = services.config.load(ConfigKind::Frpc)?;

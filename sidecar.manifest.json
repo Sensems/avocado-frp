@@ -1,0 +1,45 @@
+{
+  "frpVersion": "0.67.0",
+  "artifacts": {
+    "x86_64-pc-windows-msvc": {
+      "frpc": {
+        "url": "https://github.com/fatedier/frp/releases/download/v0.67.0/frp_0.67.0_windows_amd64.zip",
+        "sha256": "4606ce1567074e102a703db6a662d23d6a13f2cbffbc054faa4e110ff7a75582"
+      },
+      "frps": {
+        "url": "https://github.com/fatedier/frp/releases/download/v0.67.0/frp_0.67.0_windows_amd64.zip",
+        "sha256": "8031f5ea3292be96b4d169c52eb9ad27933f443578661b290668c66da1d1aa87"
+      }
+    },
+    "x86_64-unknown-linux-gnu": {
+      "frpc": {
+        "url": "https://github.com/fatedier/frp/releases/download/v0.67.0/frp_0.67.0_linux_amd64.tar.gz",
+        "sha256": "3e4eef1a641d6060f6144ceba6757df6085d475eedb8b9e61b5feb84e9fb989e"
+      },
+      "frps": {
+        "url": "https://github.com/fatedier/frp/releases/download/v0.67.0/frp_0.67.0_linux_amd64.tar.gz",
+        "sha256": "14bcc0b34dc57eab3d5e955fc1c7f95ef6a99e8ad57dd20187e935e3e59e5ada"
+      }
+    },
+    "aarch64-apple-darwin": {
+      "frpc": {
+        "url": "https://github.com/fatedier/frp/releases/download/v0.67.0/frp_0.67.0_darwin_arm64.tar.gz",
+        "sha256": "933e8fae0d02867e0b79ea7e79ce791db973cc350f4db3e59f74cbc299b70bbd"
+      },
+      "frps": {
+        "url": "https://github.com/fatedier/frp/releases/download/v0.67.0/frp_0.67.0_darwin_arm64.tar.gz",
+        "sha256": "8e1d2209b73c99bf69209b33643455d0947d1a8301ad562199eae206b20ca73d"
+      }
+    },
+    "x86_64-apple-darwin": {
+      "frpc": {
+        "url": "https://github.com/fatedier/frp/releases/download/v0.67.0/frp_0.67.0_darwin_amd64.tar.gz",
+        "sha256": "c5251b77380cba35a80a3a3e1127f76a8d6a05f5bcecaa6951c8e01644b7af60"
+      },
+      "frps": {
+        "url": "https://github.com/fatedier/frp/releases/download/v0.67.0/frp_0.67.0_darwin_amd64.tar.gz",
+        "sha256": "66f1442d20307c1bbd5d5f7ce25f9867f21c554e4b7ef3ae39175af63a9d9c4d"
+      }
+    }
+  }
+}

@@ -28,6 +28,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": true,
     "externalBin": [
       "bin/frpc",
       "bin/frps"
@@ -39,5 +40,13 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEU0RDYwODcwOThCOUM3ODQKUldTRXg3bVljQWpXNUlVM1VIK3ZNWkw3Ukp3c1V2MjVzVld0ZlMrT1FhbDV3ZlhSSU9sQVVBU3oK",
+      "endpoints": [
+        "https://github.com/Sensems/avocado-frp/releases/latest/download/latest.json"
+      ]
+    }
   }
 }

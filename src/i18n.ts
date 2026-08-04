@@ -244,7 +244,7 @@ const messages = {
       },
       actions: {
         NONE: 'No action needed',
-        REINSTALL_SIDECAR: 'Reinstall or restore the bundled FRP sidecar (0.61.1)',
+        REINSTALL_SIDECAR: 'Reinstall or restore the bundled FRP sidecar (0.67.0)',
         FIX_CONFIG: 'Open Client/Server and fix the reported TOML issues',
         CHANGE_PORT: 'Change the conflicting port in configuration',
         STOP_CONFLICTING_PROCESS: 'Stop the process occupying the port, or change the port',
@@ -254,7 +254,8 @@ const messages = {
         CHECK_ADMIN_API: 'Verify webServer addr/port and that the Admin API is reachable',
         CHECK_ADMIN_AUTH: 'Verify webServer user/password match the running process',
         FIX_DIRECTORY_PERMISSIONS: 'Fix read/write permissions for the config or log directory',
-        UPDATER_DEFERRED_WP5: 'Application updater check lands in WP5',
+        UPDATER_DEFERRED_WP5:
+          'Updater is configured. Use Settings → Check for updates',
       },
     },
     settings: {
@@ -279,7 +280,7 @@ const messages = {
       restoreConfirm: 'Restore',
       restoreSuccess: '{kind} config restored from backup',
       comingSoon: 'Coming later',
-      wpPlaceholder: 'WP5',
+      wpPlaceholder: 'Later',
       logRetention: 'Log rotation & retention',
       logRetentionDesc:
         'Rotate each process log when it exceeds the max size, and keep at most the configured number of history files (frpc.log.1 …). Limits apply to future writes only.',
@@ -317,8 +318,35 @@ const messages = {
         'Local monitor saved and frpc webServer updated. Start or restart frpc if needed to collect traffic.',
       localMonitorSavedRestart:
         'Local monitor saved and frpc webServer updated. Restart frpc to apply.',
+      updates: 'Updates',
+      updatesHint:
+        'Check GitHub Releases for a signed app update. Install stops frpc/frps first and never runs automatically.',
+      currentVersion: 'Current version',
       checkUpdates: 'Check for updates',
-      checkUpdatesDesc: 'Application updater lands in WP5.',
+      checkUpdatesDesc: 'Check the release feed for a newer application build.',
+      updateChecking: 'Checking for updates…',
+      updateAvailable: 'Update available: {version}',
+      updateUpToDate: 'You are on the latest version.',
+      updateDownloading: 'Downloading update…',
+      updateReady: 'Update installed. Restart the app to finish.',
+      updateError: 'Update check or install failed.',
+      updateNonePending: 'No update is ready to install. Check for updates first.',
+      installUpdate: 'Install update',
+      updateInstallConfirmTitle: 'Install update?',
+      updateInstallConfirmContent:
+        'Install version {version}? Running frpc/frps will be stopped before install. The app should be restarted afterward.',
+      updateInstallConfirm: 'Install',
+      updateInstalledTitle: 'Update installed',
+      updateInstalledContent:
+        'The update was installed. Restart the application to run the new version.',
+      updateRestartNow: 'Restart now',
+      updateProgressPercent: 'Download progress: {percent}%',
+      updateProgressBytes: 'Downloaded {bytes} bytes…',
+      checkUpdatesOnLaunch: 'Check on launch',
+      checkUpdatesOnLaunchDesc:
+        'Silently check for updates when the app starts. Never downloads or installs automatically.',
+      checkUpdatesOnLaunchSaved: 'Launch update-check preference saved',
+      launchUpdateAvailable: 'Update {version} is available. Open Settings to review and install.',
     },
     editor: {
       modeGroup: 'Configuration editor mode',
@@ -682,7 +710,7 @@ const messages = {
       },
       actions: {
         NONE: '无需操作',
-        REINSTALL_SIDECAR: '重新安装或恢复捆绑的 FRP sidecar（0.61.1）',
+        REINSTALL_SIDECAR: '重新安装或恢复捆绑的 FRP sidecar（0.67.0）',
         FIX_CONFIG: '打开客户端/服务端并修复报告的 TOML 问题',
         CHANGE_PORT: '在配置中修改冲突端口',
         STOP_CONFLICTING_PROCESS: '停止占用端口的进程，或修改端口',
@@ -692,7 +720,7 @@ const messages = {
         CHECK_ADMIN_API: '检查 webServer 地址/端口并确认 Admin API 可达',
         CHECK_ADMIN_AUTH: '检查 webServer 用户名/密码是否与运行中的进程一致',
         FIX_DIRECTORY_PERMISSIONS: '修复配置或日志目录的读写权限',
-        UPDATER_DEFERRED_WP5: '应用更新检查将在 WP5 落地',
+        UPDATER_DEFERRED_WP5: '更新器已配置。请到设置 → 检查更新',
       },
     },
     settings: {
@@ -717,7 +745,7 @@ const messages = {
       restoreConfirm: '恢复',
       restoreSuccess: '已从备份恢复 {kind} 配置',
       comingSoon: '后续版本',
-      wpPlaceholder: 'WP5',
+      wpPlaceholder: '稍后',
       logRetention: '日志轮转与保留',
       logRetentionDesc:
         '当单个进程日志超过最大体积时轮转，并最多保留设定数量的历史文件（frpc.log.1 …）。策略只影响后续写入。',
@@ -754,8 +782,34 @@ const messages = {
         '本地监控已保存并更新 frpc webServer。如需采集流量请启动或重启 frpc。',
       localMonitorSavedRestart:
         '本地监控已保存并更新 frpc webServer。请重启 frpc 以生效。',
+      updates: '更新',
+      updatesHint:
+        '从 GitHub Releases 检查已签名的应用更新。安装前会停止 frpc/frps，且不会自动安装。',
+      currentVersion: '当前版本',
       checkUpdates: '检查更新',
-      checkUpdatesDesc: '应用更新器将在 WP5 落地。',
+      checkUpdatesDesc: '检查发布源是否有更新的应用构建。',
+      updateChecking: '正在检查更新…',
+      updateAvailable: '发现新版本：{version}',
+      updateUpToDate: '已是最新版本。',
+      updateDownloading: '正在下载更新…',
+      updateReady: '更新已安装。请重启应用以完成。',
+      updateError: '检查或安装更新失败。',
+      updateNonePending: '没有可安装的更新，请先检查更新。',
+      installUpdate: '安装更新',
+      updateInstallConfirmTitle: '安装更新？',
+      updateInstallConfirmContent:
+        '安装版本 {version}？安装前将停止正在运行的 frpc/frps。完成后请重启应用。',
+      updateInstallConfirm: '安装',
+      updateInstalledTitle: '更新已安装',
+      updateInstalledContent: '更新已安装。请重启应用以运行新版本。',
+      updateRestartNow: '立即重启',
+      updateProgressPercent: '下载进度：{percent}%',
+      updateProgressBytes: '已下载 {bytes} 字节…',
+      checkUpdatesOnLaunch: '启动时检查',
+      checkUpdatesOnLaunchDesc:
+        '应用启动时静默检查更新，不会自动下载或安装。',
+      checkUpdatesOnLaunchSaved: '启动检查更新偏好已保存',
+      launchUpdateAvailable: '发现更新 {version}。请到设置中查看并安装。',
     },
     editor: {
       modeGroup: '配置编辑模式',

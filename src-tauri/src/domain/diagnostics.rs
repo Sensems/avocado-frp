@@ -42,7 +42,7 @@ pub mod action {
     pub const CHECK_ADMIN_API: &str = "CHECK_ADMIN_API";
     pub const CHECK_ADMIN_AUTH: &str = "CHECK_ADMIN_AUTH";
     pub const FIX_DIRECTORY_PERMISSIONS: &str = "FIX_DIRECTORY_PERMISSIONS";
-    /// Reserved for WP5 updater checks; kept for stable action-code parity with i18n.
+    /// Legacy action code retained for i18n parity; updater is configured (use Settings).
     #[allow(dead_code)]
     pub const UPDATER_DEFERRED_WP5: &str = "UPDATER_DEFERRED_WP5";
 }

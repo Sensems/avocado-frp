@@ -6,6 +6,9 @@ on:
       - 'v*' # 当推送标签以 'v' 开头时触发，例如 v0.1.0
   workflow_dispatch: # 允许在 GitHub Actions 页面手动触发
 
+permissions:
+  contents: write
+
 jobs:
   release:
     strategy:
@@ -14,70 +17,121 @@ jobs:
         include:
           - os: ubuntu-22.04
             platform: linux
+            triple: x86_64-unknown-linux-gnu
             args: ''
           - os: windows-latest
             platform: windows
+            triple: x86_64-pc-windows-msvc
             args: ''
           - os: macos-latest
             platform: macos
+            triple: aarch64-apple-darwin
             args: '--target aarch64-apple-darwin'
           - os: macos-latest
             platform: macos
+            triple: x86_64-apple-darwin
             args: '--target x86_64-apple-darwin'
 
     runs-on: ${{ matrix.os }}
 
     steps:
-      - name: 检出代码
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: 安装 Linux 系统依赖 (仅 Ubuntu)
+      - name: Require updater signing private key (fail-closed)
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if [ -z "${TAURI_SIGNING_PRIVATE_KEY}" ]; then
+            echo "::error::TAURI_SIGNING_PRIVATE_KEY is empty or not configured."
+            echo "Release builds are fail-closed: set repository Secret TAURI_SIGNING_PRIVATE_KEY"
+            echo "(and TAURI_SIGNING_PRIVATE_KEY_PASSWORD if the key is encrypted) before building."
+            echo "Do not commit the private key. Public key belongs in app config (Task 4)."
+            exit 1
+          fi
+
+      - name: Install Linux system dependencies
         if: matrix.platform == 'linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
-      - name: 设置 Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: 安装 pnpm
+      - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
           version: 9
 
-      - name: 安装前端依赖
-        run: pnpm install
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
 
-      - name: 设置 Rust
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check app version SSOT
+        run: pnpm check:versions
+
+      - name: Prepare sidecars for matrix triple
+        run: pnpm prepare:sidecars --target ${{ matrix.triple }}
+
+      - name: Verify sidecar binaries exist
+        shell: bash
+        run: |
+          set -euo pipefail
+          bin="src-tauri/bin"
+          triple="${{ matrix.triple }}"
+          if [[ "$triple" == *"windows"* ]]; then
+            test -f "$bin/frpc-${triple}.exe"
+            test -f "$bin/frps-${triple}.exe"
+            echo "OK: $bin/frpc-${triple}.exe"
+            echo "OK: $bin/frps-${triple}.exe"
+          else
+            test -f "$bin/frpc-${triple}"
+            test -f "$bin/frps-${triple}"
+            echo "OK: $bin/frpc-${triple}"
+            echo "OK: $bin/frps-${triple}"
+          fi
+
+      - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          # Tauri v2 需要
           targets: ${{ matrix.platform == 'macos' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
-      - name: 配置 Rust 缓存
+      - name: Rust cache
         uses: swatinem/rust-cache@v2
         with:
           workspaces: './src-tauri -> target'
 
-      - name: 构建目标客户端并发布
+      - name: Build and publish
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          # `tauri-action` 能够自动读取 `tauri.conf.json` 中的版本号，并处理发布
           tagName: v__VERSION__
           releaseName: 'Avocado FRP v__VERSION__'
           releaseBody: |
-            ## Avocado FRP 客户端更新 🚀
-            
-            自动构建的 Release 版本。请在下方资产列表中下载对应平台的安装包：
-            
-            - **Windows**: 下载 `.msi` 或 `.exe` 文件
-            - **macOS**: 下载 `.dmg` 文件 (包含 Intel 与 M 系列芯片双架构支持)
-            - **Linux**: 下载 `.AppImage` (免安装应用) 或 `.deb`
-            
-          releaseDraft: true # 设置为 true 会创建为草稿，方便你自己检查后再发布；如果想直接发布设为 false
+            ## Avocado FRP client release
+
+            Draft build from CI. Download the installer for your platform from the assets below.
+
+            ### Platforms
+            - **Windows** (`x86_64-pc-windows-msvc`): `.msi` / `.exe`
+            - **macOS**: `.dmg` (separate aarch64 / x86_64 targets)
+            - **Linux** (`x86_64-unknown-linux-gnu`): `.AppImage` / `.deb`
+
+            ### Integrity & signing boundary
+            - Bundled `frpc` / `frps` are prepared from `sidecar.manifest.json` (URL + SHA256) before packaging.
+            - Updater artifacts (`createUpdaterArtifacts` + `.sig` + `latest.json`) are signed with the CI `TAURI_SIGNING_PRIVATE_KEY` Secret.
+            - App endpoint: `https://github.com/Sensems/avocado-frp/releases/latest/download/latest.json`
+            - This release does **not** include Windows Authenticode or Apple Developer ID / notarization.
+            - SmartScreen / Gatekeeper may still warn on unsigned OS-level code signatures.
+          releaseDraft: true
           prerelease: false
+          uploadUpdaterJson: true
+          uploadUpdaterSignatures: true
           args: ${{ matrix.args }}

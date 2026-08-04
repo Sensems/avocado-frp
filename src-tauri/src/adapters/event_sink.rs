@@ -94,9 +94,7 @@ pub fn redact_secrets(text: &str) -> String {
     text.lines()
         .map(|line| {
             let lower = line.to_ascii_lowercase();
-            let sensitive = SENSITIVE_KEY_MARKERS
-                .iter()
-                .any(|key| lower.contains(key));
+            let sensitive = SENSITIVE_KEY_MARKERS.iter().any(|key| lower.contains(key));
             if sensitive {
                 if let Some(separator) = line.find('=') {
                     return format!("{}= ***", line[..separator].trim_end());
@@ -219,10 +217,7 @@ fn find_multiline_literal_end(s: &str) -> Option<usize> {
 }
 
 fn key_is_sensitive(key: &str) -> bool {
-    let key = key
-        .trim()
-        .trim_matches('"')
-        .trim_matches('\'');
+    let key = key.trim().trim_matches('"').trim_matches('\'');
     let lower = key.to_ascii_lowercase();
     let leaf = lower.rsplit('.').next().unwrap_or(lower.as_str());
     SENSITIVE_KEY_MARKERS
@@ -251,8 +246,7 @@ fn redact_inline_sensitive_assignments(line: &str) -> String {
     let mut cursor = 0usize;
     let mut search = 0usize;
     while search < bytes.len() {
-        if let Some((key_start, key_end, value_start)) = match_sensitive_assignment(bytes, search)
-        {
+        if let Some((key_start, key_end, value_start)) = match_sensitive_assignment(bytes, search) {
             out.push_str(&line[cursor..key_start]);
             out.push_str(line[key_start..key_end].trim_end());
             out.push_str(" = ***");

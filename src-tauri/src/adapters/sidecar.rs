@@ -8,7 +8,7 @@ use tauri_plugin_shell::ShellExt;
 use crate::domain::error::{CommandError, ErrorCode};
 use crate::domain::process::ProcessKind;
 
-pub const SUPPORTED_FRP_VERSION: &str = "0.61.1";
+pub const SUPPORTED_FRP_VERSION: &str = "0.67.0";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SidecarEvent {

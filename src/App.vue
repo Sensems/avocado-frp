@@ -15,6 +15,7 @@ import { tauriClient } from '@/services/tauriClient'
 import { useConfigStore } from '@/stores/config'
 import { useLogsStore } from '@/stores/logs'
 import { useProcessStore } from '@/stores/process'
+import { useUpdaterStore } from '@/stores/updater'
 import { Sun, Moon, Monitor, Languages, Minus, X, Maximize2 } from 'lucide-vue-next'
 import AppShell from '@/components/shell/AppShell.vue'
 
@@ -22,16 +23,9 @@ const { isDark, themeMode, cycleTheme } = useTheme()
 const processStore = useProcessStore()
 const configStore = useConfigStore()
 const logsStore = useLogsStore()
+const updaterStore = useUpdaterStore()
 const { frpcRunning, frpsRunning } = storeToRefs(processStore)
 const { locale, t } = useI18n()
-
-onMounted(() => {
-  void Promise.allSettled([
-    processStore.init(),
-    configStore.init(),
-    logsStore.init(),
-  ])
-})
 
 const theme = computed(() => (isDark.value ? darkTheme : null))
 
@@ -110,6 +104,36 @@ const themeOverrides = computed<GlobalThemeOverrides>(() => {
       railColorActive: '#15803d',
     }
   }
+})
+
+const silentCheckUpdatesOnLaunch = async () => {
+  try {
+    const settings = await tauriClient.getAppSettings()
+    if (!settings.checkUpdatesOnLaunch) return
+    const update = await updaterStore.check({ fromLaunch: true })
+    if (!update) return
+    createDiscreteApi(['message'], {
+      configProviderProps: computed(() => ({
+        theme: theme.value,
+        themeOverrides: themeOverrides.value,
+      })),
+    }).message.info(
+      t('settings.launchUpdateAvailable', { version: update.version }),
+      { duration: 8000 },
+    )
+  } catch {
+    // Launch check is best-effort; Settings remains the primary path.
+  }
+}
+
+onMounted(() => {
+  void Promise.allSettled([
+    processStore.init(),
+    configStore.init(),
+    logsStore.init(),
+  ]).then(() => {
+    void silentCheckUpdatesOnLaunch()
+  })
 })
 
 const appWindow = getCurrentWindow()

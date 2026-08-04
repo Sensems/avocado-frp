@@ -25,10 +25,7 @@ pub struct FrpcTrafficResult {
 
 impl FrpcTrafficResult {
     pub fn status_only(status: MonitorStatus) -> Self {
-        Self {
-            status,
-            body: None,
-        }
+        Self { status, body: None }
     }
 
     pub fn ok(body: String) -> Self {

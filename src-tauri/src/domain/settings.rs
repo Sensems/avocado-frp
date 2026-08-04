@@ -50,10 +50,7 @@ impl fmt::Debug for LocalMonitorPrefs {
             .field("addr", &self.addr)
             .field("port", &self.port)
             .field("user", &self.user)
-            .field(
-                "password",
-                &self.password.as_ref().map(|_| "[redacted]"),
-            )
+            .field("password", &self.password.as_ref().map(|_| "[redacted]"))
             .finish()
     }
 }
@@ -77,6 +74,13 @@ pub struct AppSettings {
     pub log_policy: LogPolicy,
     pub local_monitor: LocalMonitorPrefs,
     pub log_policy_notice_shown: bool,
+    /// Silent update check on launch (never auto-install). Missing on disk → true.
+    #[serde(default = "default_check_updates_on_launch")]
+    pub check_updates_on_launch: bool,
+}
+
+fn default_check_updates_on_launch() -> bool {
+    true
 }
 
 impl Default for AppSettings {
@@ -86,6 +90,7 @@ impl Default for AppSettings {
             log_policy: LogPolicy::default(),
             local_monitor: LocalMonitorPrefs::default(),
             log_policy_notice_shown: false,
+            check_updates_on_launch: default_check_updates_on_launch(),
         }
     }
 }
@@ -123,9 +128,10 @@ impl fmt::Debug for LocalMonitorPrefsPatch {
             .field("user", &self.user)
             .field(
                 "password",
-                &self.password.as_ref().map(|value| {
-                    value.as_ref().map(|_| "[redacted]")
-                }),
+                &self
+                    .password
+                    .as_ref()
+                    .map(|value| value.as_ref().map(|_| "[redacted]")),
             )
             .finish()
     }
@@ -140,4 +146,6 @@ pub struct AppSettingsPatch {
     pub local_monitor: Option<LocalMonitorPrefsPatch>,
     #[serde(default)]
     pub log_policy_notice_shown: Option<bool>,
+    #[serde(default)]
+    pub check_updates_on_launch: Option<bool>,
 }

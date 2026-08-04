@@ -35,12 +35,39 @@ const isCommandError = (value: unknown): value is CommandError => {
   )
 }
 
+const errorText = (error: unknown): string => {
+  if (typeof error === 'string') return error
+  if (error instanceof Error && error.message) return error.message
+  if (typeof error === 'object' && error !== null) {
+    const candidate = error as { message?: unknown }
+    if (typeof candidate.message === 'string') return candidate.message
+  }
+  return 'Unknown command error'
+}
+
+/** Map updater / network failures to the stable `UPDATE_FAILED` code. */
+export const mapUpdateError = (error: unknown): CommandError => {
+  if (isCommandError(error)) {
+    return error.code === 'UNKNOWN'
+      ? { ...error, code: 'UPDATE_FAILED', recoverable: true }
+      : error
+  }
+
+  const message = errorText(error)
+  return {
+    code: 'UPDATE_FAILED',
+    message: message || 'The update operation failed.',
+    recoverable: true,
+    detail: message,
+  }
+}
+
 export const normalizeCommandError = (error: unknown): CommandError => {
   if (isCommandError(error)) return error
 
   return {
     code: 'UNKNOWN',
-    message: typeof error === 'string' ? error : 'Unknown command error',
+    message: errorText(error),
     recoverable: false,
   }
 }

@@ -18,9 +18,7 @@ use crate::adapters::port_probe::{probe_bind, PortProbeStatus};
 use crate::adapters::sidecar::{SidecarAdapter, SUPPORTED_FRP_VERSION};
 use crate::domain::config::{ConfigKind, ConfigSnapshot, ValidationSeverity};
 use crate::domain::diagnostics::action;
-use crate::domain::diagnostics::{
-    DiagnosticResult, DiagnosticStatus, DiagnosticsReport,
-};
+use crate::domain::diagnostics::{DiagnosticResult, DiagnosticStatus, DiagnosticsReport};
 use crate::domain::error::{CommandError, ErrorCode};
 use crate::domain::process::{ProcessKind, ProcessPhase};
 use crate::domain::settings::{AppSettings, LocalMonitorPrefs, LogPolicy};
@@ -105,14 +103,11 @@ impl DiagnosticsService {
             None => admin_unavailable(ProcessKind::Frps),
         };
 
-        let config_dir = check_directory_rw("filesystem.configDir", "configDir", &self.paths.config_dir);
+        let config_dir =
+            check_directory_rw("filesystem.configDir", "configDir", &self.paths.config_dir);
         let log_dir = check_directory_rw("filesystem.logDir", "logDir", &self.paths.log_dir);
 
-        let versions = version_summary(
-            &self.app_version,
-            &frpc_sidecar,
-            &frps_sidecar,
-        );
+        let versions = version_summary(&self.app_version, &frpc_sidecar, &frps_sidecar);
 
         let mut results = vec![frpc_sidecar, frps_sidecar, config_frpc, config_frps];
         results.extend(port_results);
@@ -214,11 +209,7 @@ impl DiagnosticsService {
                 id: id.into(),
                 status: DiagnosticStatus::Pass,
                 title_key: Some(title_key.into()),
-                detail: format!(
-                    "{} sidecar OK (version {})",
-                    kind_label(kind),
-                    info.version
-                ),
+                detail: format!("{} sidecar OK (version {})", kind_label(kind), info.version),
                 suggested_action: action::NONE.into(),
             },
             Err(error) => {
@@ -308,7 +299,10 @@ fn check_config(kind: ConfigKind, snapshot: Option<&ConfigSnapshot>) -> Diagnost
             id: id.into(),
             status: DiagnosticStatus::Fail,
             title_key: Some(title_key.into()),
-            detail: format!("{} configuration could not be loaded", kind_label_config(kind)),
+            detail: format!(
+                "{} configuration could not be loaded",
+                kind_label_config(kind)
+            ),
             suggested_action: action::FIX_CONFIG.into(),
         };
     };
@@ -407,11 +401,7 @@ fn check_frps_ports(snapshot: &ConfigSnapshot, managed_running: bool) -> Vec<Dia
         ));
     }
     if let Some(port) = known.web_server.port {
-        let addr = known
-            .web_server
-            .addr
-            .as_deref()
-            .unwrap_or("127.0.0.1");
+        let addr = known.web_server.addr.as_deref().unwrap_or("127.0.0.1");
         results.push(port_result(
             "ports.frps.webServer",
             "portsFrpsWebServer",
@@ -429,11 +419,7 @@ fn check_frpc_ports(snapshot: &ConfigSnapshot, managed_running: bool) -> Vec<Dia
     };
     let mut results = Vec::new();
     if let Some(port) = known.web_server.port {
-        let addr = known
-            .web_server
-            .addr
-            .as_deref()
-            .unwrap_or("127.0.0.1");
+        let addr = known.web_server.addr.as_deref().unwrap_or("127.0.0.1");
         results.push(port_result(
             "ports.frpc.webServer",
             "portsFrpcWebServer",
@@ -451,10 +437,7 @@ fn check_frpc_ports(snapshot: &ConfigSnapshot, managed_running: bool) -> Vec<Dia
     let mut remote_action = action::NONE;
 
     for proxy in &known.proxies {
-        let name = proxy
-            .name
-            .as_deref()
-            .unwrap_or(proxy.source_name.as_str());
+        let name = proxy.name.as_deref().unwrap_or(proxy.source_name.as_str());
         if let Some(port) = proxy.local_port {
             let addr = proxy.local_ip.as_deref().unwrap_or("127.0.0.1");
             let probe = probe_bind(addr, port);
@@ -597,11 +580,7 @@ async fn check_server_connectivity(snapshot: &ConfigSnapshot) -> DiagnosticResul
         };
     };
     let target = format!("{addr}:{port}");
-    let connect_result = timeout(
-        Duration::from_secs(2),
-        TcpStream::connect((addr, port)),
-    )
-    .await;
+    let connect_result = timeout(Duration::from_secs(2), TcpStream::connect((addr, port))).await;
     match connect_result {
         Ok(Ok(_stream)) => DiagnosticResult {
             id: "connectivity.frpc.server".into(),
@@ -692,8 +671,9 @@ fn version_summary(
         status,
         title_key: Some("versionsSummary".into()),
         detail: format!(
-            "app {app_version}; frpc {frpc_ver}; frps {frps_ver}; expected sidecar {SUPPORTED_FRP_VERSION}; updater check not configured (WP5)"
+            "app {app_version}; frpc {frpc_ver}; frps {frps_ver}; expected sidecar {SUPPORTED_FRP_VERSION}; updater configured (Settings → Check for updates)"
         ),
+
         suggested_action: suggested_action.into(),
     }
 }
@@ -784,6 +764,7 @@ struct AppSettingsExport {
     log_policy: LogPolicy,
     local_monitor: LocalMonitorPrefsExport,
     log_policy_notice_shown: bool,
+    check_updates_on_launch: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -806,6 +787,7 @@ impl From<&AppSettings> for AppSettingsExport {
             log_policy: settings.log_policy.clone(),
             local_monitor: LocalMonitorPrefsExport::from(&settings.local_monitor),
             log_policy_notice_shown: settings.log_policy_notice_shown,
+            check_updates_on_launch: settings.check_updates_on_launch,
         }
     }
 }
@@ -829,8 +811,12 @@ fn write_zip_json<T: Serialize>(
     options: SimpleFileOptions,
 ) -> Result<(), CommandError> {
     let body = serde_json::to_string_pretty(value).map_err(|error| {
-        CommandError::new(ErrorCode::Unknown, "failed to serialize diagnostics pack entry", true)
-            .with_detail(error.to_string())
+        CommandError::new(
+            ErrorCode::Unknown,
+            "failed to serialize diagnostics pack entry",
+            true,
+        )
+        .with_detail(error.to_string())
     })?;
     write_zip_text(zip, name, &body, options)
 }
@@ -869,7 +855,10 @@ fn is_managed_log_name(name: &str) -> bool {
         if name == base {
             return true;
         }
-        if let Some(suffix) = name.strip_prefix(base).and_then(|rest| rest.strip_prefix('.')) {
+        if let Some(suffix) = name
+            .strip_prefix(base)
+            .and_then(|rest| rest.strip_prefix('.'))
+        {
             if !suffix.is_empty() && suffix.chars().all(|ch| ch.is_ascii_digit()) {
                 return true;
             }
@@ -889,6 +878,10 @@ fn map_pack_io(error: std::io::Error) -> CommandError {
 }
 
 fn map_zip_error(error: zip::result::ZipError) -> CommandError {
-    CommandError::new(ErrorCode::ConfigIo, "failed to write diagnostics pack entry", true)
-        .with_detail(error.to_string())
+    CommandError::new(
+        ErrorCode::ConfigIo,
+        "failed to write diagnostics pack entry",
+        true,
+    )
+    .with_detail(error.to_string())
 }
