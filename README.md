@@ -1,96 +1,96 @@
-# 🥑 Avocado FRP
+# Avocado FRP
 
-**Avocado FRP** 是一款基于 Tauri 和 Vue 3 开发的跨平台 FRP (Fast Reverse Proxy) 桌面可视化管理工具。它旨在提供一个美观、现代、易于使用的图形界面，让你彻底告别在终端中手动管理 `frpc` 和 `frps` 配置与进程的繁琐体验。
-
----
-
-## 💡 出发点 (Why Avocado FRP?)
-
-FRP 是一个非常强大的内网穿透工具，但其原生的命令行交互方式对于许多非硬核网络工程师或只希望快速暴露本地服务的开发者来说，存在一些痛点：
-
-1. **配置不直观**：修改 `ini` 或 `toml` 配置文件容易出错，缺乏实时反馈。
-2. **进程管理麻烦**：后台运行 `frpc` 和 `frps` 需要依赖 `systemd` 或其他进程守护工具，难以一键启停。
-3. **状态不透明**：无法直观地知道服务当前是运行中还是已停止。
-4. **多端环境切换**：在不同网络下频繁修改配置极不方便。
-
-**Avocado FRP** 由此诞生，通过提供现代化的图形交互界面(GUI)，我们希望将内网穿透变得像打开鳄梨(Avocado)一样简单、优雅。
+**Avocado FRP** is a cross-platform FRP (Fast Reverse Proxy) desktop ops console built with Tauri and Vue 3. It manages bundled `frpc` / `frps` sidecars, TOML configs, and process lifecycle from a single window.
 
 ---
 
-## ✨ 详细功能 (Features)
+## Why Avocado FRP?
 
-- 🖥 **全平台支持**：得益于 Tauri，支持 Windows, macOS, Linux。
-- 🎨 **现代化美观界面**：基于 Naive UI 和 Tailwind CSS 打造，支持平滑的**冷暖色调切换 (深色模式/浅色模式)**。
-- 🌍 **国际化支持**：内置完整的中文与英文 (zh/en) 支持，一键切换。
-- 🚀 **一键启停**：可视化的启动与停止按钮，独立管理 `frpc` (客户端) 和 `frps` (服务端) 进程。
-- 📝 **内置配置编辑器**：不需要到处找配置文件，直接在应用内编辑 `frpc` 和 `frps` 的配置文件，提供语法高亮。
-- 🟢 **实时状态监控**：通过顶部状态栏指示灯，实时了解当前的 `frpc` 和 `frps` 运行状态。
-- 🔒 **原生集成**：应用内已打包 `frpc` 和 `frps` 二进制内核文件，无需额外下载或配置环境变量。
-- 托盘与后台运行 (即将支持)：可以最小化到系统托盘，静默进行内网穿透。
+FRP is powerful, but CLI-only workflows are awkward for day-to-day ops:
+
+1. **Opaque config** — editing `toml` by hand is error-prone without validation feedback.
+2. **Process babysitting** — starting/stopping `frpc` / `frps` without a supervisor is tedious.
+3. **Unclear health** — hard to see phase, pending restart, and recent faults at a glance.
+
+Avocado FRP provides a focused operations UI for those jobs.
 
 ---
 
-## 🚀 如何使用 (Usage)
+## Features (implemented)
 
-### 1. 下载与安装
+- **Ops console shell** — left nav (Overview / Client / Server / Logs / Settings), top status bar with frpc/frps phase, pending restart, and last fault. Default route: Overview. Minimum window size 1024×768.
+- **Overview** — process cards, config issue summary, recent error lines, traffic summary when frpc local monitor is healthy (with empty states for disabled / stopped / port conflict / timeout / auth / not configured).
+- **Client & Server** — Start / Stop / Save / Save & Restart; form ↔ source dual mode; mode switch never autosaves; Apply is explicit.
+- **Source editor** — CodeMirror TOML with Validate → Preview → Apply (revision-checked; conflicts rejected).
+- **Lossless config patches** — form saves apply minimal patches and keep unknown fields / comments where the backend supports them.
+- **Logs** — filter by source / level / keyword, pause auto-scroll, clear UI buffer only (does not delete disk logs), copy visible lines, export via backend. Disk log deletion requires explicit confirmation.
+- **Log rotation & retention** — process logs rotate when the active file exceeds the configured size; rotated history count is capped by policy (`maxFileBytes` / `maxRotatedFiles` in Settings, with bounds). Changing policy does not bulk-delete existing oversized files; only subsequent writes follow the new policy.
+- **Diagnostics** — Run Diagnostics reports pass / warning / fail per check with suggested fix actions (sidecar presence, config validity, port conflicts, and related ops checks). Export a redacted diagnostics pack (no plaintext token / password / secret in the bundle).
+- **Local monitor** — optional frpc admin/webServer prefs (default loopback `127.0.0.1:7400`); Overview traffic uses structured status empty states instead of a hard-coded remote URL.
+- **Settings** — autostart, theme, locale, restore `.toml.bak` with confirmation; app version display; editable log rotation policy and local monitor prefs. Updater controls remain disabled placeholders labeled WP5.
+- **Tray / shutdown** — closing can stay in tray; quit prepares shutdown so app-owned sidecars do not linger.
+- **i18n** — zh / en.
+- **Bundled binaries** — `frpc` / `frps` shipped with the app (no separate PATH setup).
 
-进入项目的 [Releases](#) 页面（目前可用包位于 `src-tauri/target/release/bundle/` 下），下载对应操作系统的安装包：
-- Windows: `.msi` 或 `.exe`
-- macOS: `.dmg` 或 `.app`
-- Linux: `.AppImage` 或 `.deb`
+Not claimed in this package: Tauri updater, signed releases, sidecar remote download / SHA256 manifest, or PR CI quality gates (WP5).
 
-**针对 macOS 用户的特别说明：**
-如果安装后打开提示“应用已损坏，无法打开”或提示开发者不受信任，这是由于目前应用未进行 Apple 官方签名。
-你可以打开**终端 (Terminal)**，并运行以下命令（注意将路径替换为你实际安装的名字）：
+---
+
+## Usage
+
+### 1. Install
+
+Download a release build for your OS (local packages may also appear under `src-tauri/target/release/bundle/`).
+
+**macOS unsigned note:** if Gatekeeper blocks the app:
+
 ```bash
 sudo xattr -rd com.apple.quarantine "/Applications/Avocado FRP.app"
 ```
-输入密码执行后，即可在启动台中正常打开应用。
 
-### 2. 初始化配置
+### 2. Configure
 
-1. 启动 **Avocado FRP** 应用程序。
-2. 在界面上方可以看到 `frpc` 和 `frps` 两个主标签页。
-   - **如果您是服务端点**：切换到 `frps`，在配置编辑框中填入您的服务端配置规则（例如端口号、授权 Token 等），点击“保存”。
-   - **如果您是客户端点**：切换到 `frpc`，在编辑框中填入指向您的服务器以及要映射的本地端口号，点击“保存”。
+1. Open **Server** to set bind port / token (form or source), then **Apply** / **Save**.
+2. Open **Client** to set server address and proxy rules, then **Apply** / **Save**.
+3. Form ↔ source switches discard unapplied drafts only after confirm; they never write the file implicitly.
 
-### 3. 一键启停
+### 3. Start / stop
 
-- 配置就绪后，点击对应的 **“启动 frpc”** 或 **“启动 frps”** 按钮。
-- 应用会弹出消息提示服务正在启动。
-- 成功后，应用顶部状态栏指示灯将变为常亮的绿色（或者根据相应的服务显示活动状态）。
-- 若需修改配置，建议先点击 **“停止”** 按钮，修改并保存后再重新启动。
+Use Overview or the Client/Server ops bar. The top bar shows phase and “restart pending” when config changed while a process is running.
 
-### 4. 个性化设置
+### 4. Logs & diagnostics
 
-- **主题切换**：点击界面右上角的日/月图标，自由在深色、浅色及跟随系统之间切换。
-- **语言切换**：点击语言图标，可即时切换界面的中英显示。
+1. **Logs** — clear screen only clears the UI buffer. Use delete-from-disk with confirmation to remove managed log files.
+2. **Settings** — set max file size and rotated history count; enable local monitor (loopback by default) when you want Overview traffic.
+3. **Diagnostics** — run checks from Settings (or the diagnostics panel), then optionally export a redacted pack for support.
+
+### 5. Backup restore
+
+Successful replaces keep `<name>.toml.bak`. Settings → restore asks for confirmation and respects revision conflicts.
 
 ---
 
-## 🛠 本地开发 (Development)
+## Development
 
-如果您希望参与到 **Avocado FRP** 的开发中，可以按照以下步骤在本地运行：
-
-**环境要求：**
-- Node.js (v18+)
-- Rust (1.70+)
-- pnpm
+Requirements: Node.js 18+, Rust 1.70+, pnpm.
 
 ```bash
-# 克隆仓库
 git clone https://github.com/sensems/avocado-frp.git
 cd avocado-frp
-
-# 安装依赖
 pnpm install
-
-# 启动开发服务器和 Tauri
 pnpm tauri dev
-
-# 打包应用
 pnpm tauri build
 ```
 
-## 📄 开源协议
+Useful checks:
+
+```bash
+pnpm typecheck
+pnpm build
+cargo check --manifest-path src-tauri/Cargo.toml
+cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
+```
+
+## License
+
 MIT License

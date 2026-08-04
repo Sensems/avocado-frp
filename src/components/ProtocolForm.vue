@@ -1,35 +1,62 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { GitBranch, Save, X } from 'lucide-vue-next'
+import {
+  PROTOCOL_TYPES,
+  toProxyRuleForm,
+  validateProxyRuleForm,
+  type ProxyRuleErrors,
+  type ProxyRuleField,
+  type ProxyRuleSavePayload,
+  type ProxyRuleSource,
+} from '@/domain/proxyRule'
 
 const props = defineProps<{
-    initialData?: any
-    editMode?: boolean
-    editIndex?: number
+  initialData?: ProxyRuleSource
+  editMode?: boolean
+  editIndex?: number
 }>()
 
-const form = ref({
-    name: props.initialData?.name || '',
-    type: props.initialData?.type || 'tcp',
-    localIp: props.initialData?.localIp || '127.0.0.1',
-    localPort: props.initialData?.localPort || '',
-    remotePort: props.initialData?.remotePort || '',
-    customDomains: props.initialData?.customDomains || ''
-})
+const emit = defineEmits<{
+  (event: 'save', payload: ProxyRuleSavePayload): void
+  (event: 'cancel'): void
+}>()
 
-const emit = defineEmits(['save', 'cancel'])
+const { t } = useI18n()
+const form = ref(toProxyRuleForm(props.initialData))
+const errors = ref<ProxyRuleErrors>({})
+const protocolTypes = PROTOCOL_TYPES
+const isHttp = computed(
+  () => form.value.type === 'http' || form.value.type === 'https',
+)
 
-const protocolTypes = ['tcp', 'udp', 'http', 'https', 'stcp', 'xtcp']
+watch(
+  () => props.initialData,
+  (value) => {
+    form.value = toProxyRuleForm(value)
+    errors.value = {}
+  },
+  { deep: true },
+)
 
-const isHttp = computed(() => ['http', 'https'].includes(form.value.type))
+const validationStatus = (field: ProxyRuleField) =>
+  errors.value[field] ? 'error' : undefined
+
+const validationFeedback = (field: ProxyRuleField) => {
+  const code = errors.value[field]
+  return code ? t(`forms.validation.${code}`) : undefined
+}
 
 const handleSave = () => {
-    if (!form.value.name || !form.value.localPort) return
-    emit('save', {
-        ...form.value,
-        editMode: props.editMode,
-        editIndex: props.editIndex
-    })
+  errors.value = validateProxyRuleForm(form.value)
+  if (Object.keys(errors.value).length > 0) return
+
+  emit('save', {
+    ...form.value,
+    editMode: props.editMode,
+    editIndex: props.editIndex,
+  })
 }
 </script>
 
@@ -48,10 +75,10 @@ const handleSave = () => {
                 </div>
                 <div>
                     <h3 class="text-base font-bold tracking-tight leading-tight">
-                        {{ editMode ? $t('forms.editRuleTitle', '编辑规则') : $t('forms.ruleTitle') }}
+                        {{ editMode ? $t('forms.editRuleTitle') : $t('forms.ruleTitle') }}
                     </h3>
                     <p class="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
-                        {{ editMode ? '修改已有的本地端口到公网服务器的映射。' : '创建新的本地端口到公网服务器的映射。' }}
+                        {{ editMode ? $t('forms.ruleEditDesc') : $t('forms.ruleCreateDesc') }}
                     </p>
                 </div>
             </div>
@@ -63,7 +90,12 @@ const handleSave = () => {
         </div>
 
         <n-form :model="form" size="large" label-placement="top">
-            <n-form-item :label="$t('forms.ruleName')" path="name">
+            <n-form-item
+                :label="$t('forms.ruleName')"
+                path="name"
+                :validation-status="validationStatus('name')"
+                :feedback="validationFeedback('name')"
+            >
                 <n-input v-model:value="form.name" :placeholder="$t('forms.ruleNamePlace')" />
             </n-form-item>
 
@@ -73,23 +105,42 @@ const handleSave = () => {
             </n-form-item>
 
             <div class="grid grid-cols-2 gap-5">
-                <n-form-item :label="$t('forms.localIp')" path="localIp">
+                <n-form-item
+                    :label="$t('forms.localIp')"
+                    path="localIp"
+                    :validation-status="validationStatus('localIp')"
+                    :feedback="validationFeedback('localIp')"
+                >
                     <n-input v-model:value="form.localIp" :placeholder="$t('forms.localIpPlace')" />
                 </n-form-item>
-                <n-form-item :label="$t('forms.localPort')" path="localPort">
+                <n-form-item
+                    :label="$t('forms.localPort')"
+                    path="localPort"
+                    :validation-status="validationStatus('localPort')"
+                    :feedback="validationFeedback('localPort')"
+                >
                     <n-input v-model:value="form.localPort" placeholder="8080" />
                 </n-form-item>
             </div>
 
-            <n-form-item v-if="!isHttp" :label="$t('forms.remotePort') + ' (Remote Port)'" path="remotePort">
+            <n-form-item
+                v-if="!isHttp"
+                :label="$t('forms.remotePort') + ' (Remote Port)'"
+                path="remotePort"
+                :validation-status="validationStatus('remotePort')"
+                :feedback="validationFeedback('remotePort')"
+            >
                 <n-input v-model:value="form.remotePort" placeholder="6000" />
             </n-form-item>
 
-            <n-form-item v-if="isHttp" :label="$t('forms.customDomains') + ' (Custom Domains)'" path="customDomains">
+            <n-form-item
+                v-if="isHttp"
+                :label="$t('forms.customDomains') + ' (Custom Domains)'"
+                path="customDomains"
+                :validation-status="validationStatus('customDomains')"
+                :feedback="validationFeedback('customDomains') || $t('forms.customDomainsHint')"
+            >
                 <n-input v-model:value="form.customDomains" :placeholder="$t('forms.customDomainsPlace')" />
-                <template #feedback>
-                    多个域名使用逗号分隔
-                </template>
             </n-form-item>
         </n-form>
 
@@ -102,7 +153,7 @@ const handleSave = () => {
                 {{ $t('forms.cancel') }}
             </n-button>
             <n-button type="primary" @click="handleSave" size="large"
-                class="px-5 transition-all duration-200 active:scale-[0.97] cursor-pointer glow-green">
+                class="px-5 transition-all duration-200 active:scale-[0.97] cursor-pointer">
                 <template #icon>
                     <Save :size="15" />
                 </template>

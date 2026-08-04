@@ -1,32 +1,87 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { Save } from 'lucide-vue-next'
+import type {
+    FrpcGlobalFormData,
+    FrpcKnownConfig,
+} from '@/domain/config'
 
-const props = defineProps<{
-    initialData?: any
-}>()
+const props = withDefaults(
+    defineProps<{
+        initialData?: FrpcKnownConfig
+        /** When true, omit the inline Save button (parent OpsBar handles save). */
+        hideSave?: boolean
+    }>(),
+    {
+        hideSave: false,
+    },
+)
 
-const form = ref({
-    serverAddr: props.initialData?.serverAddr || '',
-    serverPort: props.initialData?.serverPort || '',
-    authMethod: props.initialData?.auth?.method || null,
-    token: props.initialData?.auth?.token || '',
+interface FrpcFormState {
+    serverAddr: string
+    serverPort: number | null
+    authMethod: string | null
+    token: string
+}
+
+const toFrpcForm = (value?: FrpcKnownConfig): FrpcFormState => ({
+    serverAddr: value?.serverAddr ?? '',
+    serverPort: value?.serverPort ?? null,
+    authMethod: value?.auth.method ?? null,
+    token: value?.auth.token ?? '',
 })
 
-watch(() => props.initialData, (newVal) => {
-    if (newVal) {
-        form.value.serverAddr = newVal.serverAddr || ''
-        form.value.serverPort = newVal.serverPort || ''
-        form.value.authMethod = newVal.auth?.method || null
-        form.value.token = newVal.auth?.token || ''
-    }
-}, { deep: true, immediate: true })
+	const form = ref<FrpcFormState>(toFrpcForm(props.initialData))
 
-const emit = defineEmits(['save'])
+	const emit = defineEmits<{
+	    save: [value: FrpcGlobalFormData]
+	    'update:dirty': [dirty: boolean]
+	}>()
+
+	const isDirty = computed(() => {
+	    const baseline = toFrpcForm(props.initialData)
+	    const current = form.value
+	    return (
+	        baseline.serverAddr !== current.serverAddr ||
+	        baseline.serverPort !== current.serverPort ||
+	        baseline.authMethod !== current.authMethod ||
+	        baseline.token !== current.token
+	    )
+	})
+
+	// Watch only global baseline fields — proxy list churn must not reset in-progress edits.
+	watch(
+	    () =>
+	        [
+	            props.initialData?.serverAddr ?? '',
+	            props.initialData?.serverPort ?? null,
+	            props.initialData?.auth.method ?? null,
+	            props.initialData?.auth.token ?? '',
+	        ] as const,
+	    (_next, prev) => {
+	        // On subsequent updates, keep local dirty edits intact.
+	        if (prev !== undefined && isDirty.value) return
+	        form.value = toFrpcForm(props.initialData)
+	    },
+	    { immediate: true },
+	)
+
+	watch(
+	    isDirty,
+	    (dirty) => {
+	        emit('update:dirty', dirty)
+	    },
+	    { immediate: true },
+	)
 
 const handleSave = () => {
     emit('save', { ...form.value })
 }
+
+defineExpose({
+    getFormData: (): FrpcGlobalFormData => ({ ...form.value }),
+    isDirty: () => isDirty.value,
+})
 </script>
 
 <template>
@@ -54,7 +109,7 @@ const handleSave = () => {
             </div>
         </n-form>
 
-        <div class="flex justify-end mt-5">
+        <div v-if="!hideSave" class="flex justify-end mt-5">
             <n-button type="primary" size="large" @click="handleSave"
                 class="px-6 transition-all duration-200 active:scale-[0.97] cursor-pointer">
                 <template #icon>
@@ -65,9 +120,3 @@ const handleSave = () => {
         </div>
     </div>
 </template>
-
-<style scoped>
-.glow-blue {
-    box-shadow: 0 4px 14px 0 rgba(14, 165, 233, 0.39);
-}
-</style>

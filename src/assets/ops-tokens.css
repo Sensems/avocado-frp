@@ -1,0 +1,24 @@
+:root {
+  --ops-bg: #f4f6f8;
+  --ops-surface: #ffffff;
+  --ops-border: #d7dee7;
+  --ops-text: #142033;
+  --ops-muted: #5b6b7c;
+  --ops-accent: #2563eb;
+  --ops-ok: #15803d;
+  --ops-warn: #a16207;
+  --ops-danger: #b91c1c;
+  --ops-radius: 8px;
+  --ops-gap: 16px;
+  --ops-sidebar-width: 220px;
+  --ops-topbar-height: 48px;
+  --ops-control-height: 36px;
+}
+
+.dark {
+  --ops-bg: #0f1419;
+  --ops-surface: #171d25;
+  --ops-border: #2a3441;
+  --ops-text: #e7edf5;
+  --ops-muted: #9aa8b5;
+}

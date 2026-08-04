@@ -2,27 +2,42 @@
 import { darkTheme, createDiscreteApi } from 'naive-ui'
 import type { GlobalThemeOverrides } from 'naive-ui'
 import { computed, watch, onMounted } from 'vue'
+import { storeToRefs } from 'pinia'
 import { useTheme } from '@/composables/useTheme'
-import { useProcessStatus } from '@/composables/useProcessStatus'
-import { useAppLogs } from '@/composables/useAppLogs'
 import { useI18n } from 'vue-i18n'
 import { getCurrentWindow } from '@tauri-apps/api/window'
+import { persistLocale } from '@/lib/preferences'
+import {
+  getCommandErrorI18nKey,
+  normalizeCommandError,
+} from '@/services/errorMapper'
+import { tauriClient } from '@/services/tauriClient'
+import { useConfigStore } from '@/stores/config'
+import { useLogsStore } from '@/stores/logs'
+import { useProcessStore } from '@/stores/process'
 import { Sun, Moon, Monitor, Languages, Minus, X, Maximize2 } from 'lucide-vue-next'
+import AppShell from '@/components/shell/AppShell.vue'
 
 const { isDark, themeMode, cycleTheme } = useTheme()
-const { frpcRunning, frpsRunning } = useProcessStatus()
-const { initListeners } = useAppLogs()
+const processStore = useProcessStore()
+const configStore = useConfigStore()
+const logsStore = useLogsStore()
+const { frpcRunning, frpsRunning } = storeToRefs(processStore)
 const { locale, t } = useI18n()
 
 onMounted(() => {
-  initListeners()
+  void Promise.allSettled([
+    processStore.init(),
+    configStore.init(),
+    logsStore.init(),
+  ])
 })
 
 const theme = computed(() => (isDark.value ? darkTheme : null))
 
 /** 语言切换时持久化 */
-watch(locale, (val) => {
-  localStorage.setItem('avocado-frp-lang', val)
+watch(locale, (value) => {
+  persistLocale(value)
 })
 
 /** 主题切换图标 */
@@ -46,56 +61,82 @@ const themeOverrides = computed<GlobalThemeOverrides>(() => {
   const dark = isDark.value
   return {
     common: {
-      borderRadius: '12px',
-      primaryColor: '#22C55E',
-      primaryColorHover: '#4ADE80',
-      primaryColorPressed: '#16A34A',
-      primaryColorSuppl: '#22C55E',
-      infoColor: '#0EA5E9',
-      infoColorHover: '#38BDF8',
-      infoColorPressed: '#0284C7',
-      errorColor: '#EF4444',
-      errorColorHover: '#F87171',
-      errorColorPressed: '#DC2626',
-      bodyColor: dark ? '#020617' : '#F8FAFC',
-      cardColor: dark ? '#0F172A' : '#FFFFFF',
-      modalColor: dark ? '#0F172A' : '#FFFFFF',
-      popoverColor: dark ? '#1E293B' : '#FFFFFF',
-      inputColor: dark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)',
-      tableColor: dark ? '#0F172A' : '#FFFFFF',
+      borderRadius: '8px',
+      primaryColor: '#2563eb',
+      primaryColorHover: '#3b82f6',
+      primaryColorPressed: '#1d4ed8',
+      primaryColorSuppl: '#2563eb',
+      infoColor: '#2563eb',
+      infoColorHover: '#3b82f6',
+      infoColorPressed: '#1d4ed8',
+      successColor: '#15803d',
+      warningColor: '#a16207',
+      errorColor: '#b91c1c',
+      errorColorHover: '#dc2626',
+      errorColorPressed: '#991b1b',
+      bodyColor: dark ? '#0f1419' : '#f4f6f8',
+      cardColor: dark ? '#171d25' : '#ffffff',
+      modalColor: dark ? '#171d25' : '#ffffff',
+      popoverColor: dark ? '#171d25' : '#ffffff',
+      inputColor: dark ? '#171d25' : '#ffffff',
+      tableColor: dark ? '#171d25' : '#ffffff',
       hoverColor: dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
-      dividerColor: dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
-      borderColor: dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)',
-      textColorBase: dark ? '#F8FAFC' : '#0F172A',
-      textColor1: dark ? '#F1F5F9' : '#1E293B',
-      textColor2: dark ? '#CBD5E1' : '#475569',
-      textColor3: dark ? '#94A3B8' : '#64748B',
+      dividerColor: dark ? '#2a3441' : '#d7dee7',
+      borderColor: dark ? '#2a3441' : '#d7dee7',
+      textColorBase: dark ? '#e7edf5' : '#142033',
+      textColor1: dark ? '#e7edf5' : '#142033',
+      textColor2: dark ? '#9aa8b5' : '#5b6b7c',
+      textColor3: dark ? '#9aa8b5' : '#5b6b7c',
     },
     Card: {
-      borderRadius: '16px',
-      color: dark ? 'rgba(15, 23, 42, 0.6)' : 'rgba(255, 255, 255, 0.7)',
-      borderColor: dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
+      borderRadius: '8px',
+      color: dark ? '#171d25' : '#ffffff',
+      borderColor: dark ? '#2a3441' : '#d7dee7',
     },
     Button: {
-      borderRadiusMedium: '10px',
-      borderRadiusLarge: '12px',
+      borderRadiusMedium: '8px',
+      borderRadiusLarge: '8px',
     },
     Input: {
-      borderRadius: '10px',
-      color: dark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)',
-      borderHover: '1px solid rgba(34, 197, 94, 0.4)',
-      borderFocus: '1px solid rgba(34, 197, 94, 0.6)',
+      borderRadius: '8px',
+      color: dark ? '#171d25' : '#ffffff',
+      borderHover: '1px solid #2563eb',
+      borderFocus: '1px solid #2563eb',
     },
     Tabs: {
-      tabBorderRadius: '10px',
+      tabBorderRadius: '8px',
     },
     Switch: {
-      railColorActive: '#22C55E',
+      railColorActive: '#15803d',
     }
   }
 })
 
 const appWindow = getCurrentWindow()
+
+const discreteDialog = () =>
+  createDiscreteApi(['dialog'], {
+    configProviderProps: computed(() => ({
+      theme: theme.value,
+      themeOverrides: themeOverrides.value,
+    })),
+  }).dialog
+
+const quitApplication = async () => {
+  try {
+    await tauriClient.prepareShutdown()
+    await appWindow.close()
+  } catch (error) {
+    const commandError = normalizeCommandError(error)
+    discreteDialog().error({
+      title: t('app.closeFailedTitle'),
+      content: t('app.closeFailedContent', {
+        error: t(getCommandErrorI18nKey(commandError)),
+      }),
+      positiveText: t('forms.confirm'),
+    })
+  }
+}
 
 const handleMinimize = () => {
   appWindow.minimize()
@@ -112,14 +153,7 @@ const handleMaximize = async () => {
 
 const handleClose = () => {
   if (frpcRunning.value || frpsRunning.value) {
-    const { dialog } = createDiscreteApi(['dialog'], {
-      configProviderProps: computed(() => ({
-        theme: theme.value,
-        themeOverrides: themeOverrides.value
-      }))
-    })
-
-    dialog.warning({
+    discreteDialog().warning({
       title: t('app.closeTitle'),
       content: t('app.closeRunningContent'),
       positiveText: t('app.minimizeToTray'),
@@ -128,137 +162,112 @@ const handleClose = () => {
         appWindow.hide()
       },
       onNegativeClick: () => {
-        appWindow.close()
-      }
+        void quitApplication()
+      },
     })
   } else {
-    appWindow.close()
+    void quitApplication()
   }
 }
 </script>
 
 <template>
-  <n-config-provider :theme="theme" :theme-overrides="themeOverrides"
-    class="h-screen w-full flex flex-col overflow-hidden transition-colors duration-300" :style="{
-      background: isDark
-        ? 'linear-gradient(145deg, #020617 0%, #0F172A 50%, #020617 100%)'
-        : 'linear-gradient(145deg, #F8FAFC 0%, #F1F5F9 50%, #E2E8F0 100%)'
-    }">
+  <n-config-provider
+    :theme="theme"
+    :theme-overrides="themeOverrides"
+    class="h-screen w-full flex flex-col overflow-hidden"
+    :style="{ background: 'var(--ops-bg)', color: 'var(--ops-text)' }"
+  >
     <n-global-style />
     <n-message-provider>
       <n-dialog-provider>
-        <!-- Header -->
-        <header data-tauri-drag-region @mousedown="appWindow.startDragging()"
-          class="h-12 border-b flex items-center justify-between px-5 shrink-0 select-none z-50 transition-all duration-300 relative"
-          :class="[
-            isDark
-              ? 'border-white/[0.06] bg-[#0F172A]/80 backdrop-blur-xl'
-              : 'border-black/[0.06] bg-white/80 backdrop-blur-xl'
-          ]">
-          <!-- Left: Logo + App Name -->
+        <!-- Window chrome -->
+        <header
+          data-tauri-drag-region
+          @mousedown="appWindow.startDragging()"
+          class="h-12 border-b flex items-center justify-between px-5 shrink-0 select-none z-50 relative"
+          :style="{
+            borderColor: 'var(--ops-border)',
+            background: 'var(--ops-surface)',
+          }"
+        >
           <div class="flex items-center gap-2.5">
-            <img src="@/assets/logo.png" alt="Logo" class="w-7 h-7 drop-shadow-sm" />
-            <h1 class="text-[14px] font-bold tracking-wide leading-1"
-              :class="isDark ? 'text-slate-200' : 'text-slate-800'">
+            <img src="@/assets/logo.png" alt="Logo" class="w-7 h-7" />
+            <h1
+              class="text-[14px] font-bold tracking-wide leading-1"
+              :style="{ color: 'var(--ops-text)' }"
+            >
               Avocado FRP
             </h1>
           </div>
 
-          <!-- Right: Status + Language + Theme -->
           <div class="flex items-center gap-3">
-            <!-- Process Status Indicators -->
-            <div class="flex items-center gap-2.5 text-[11px] font-medium"
-              :class="isDark ? 'text-slate-400' : 'text-slate-500'">
-              <!-- frpc status -->
-              <n-tooltip trigger="hover">
-                <template #trigger>
-                  <div class="flex items-center gap-1.5 cursor-default">
-                    <span class="w-2 h-2 rounded-full transition-all duration-500" :class="frpcRunning
-                      ? 'bg-emerald-500 dot-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]'
-                      : isDark ? 'bg-slate-600' : 'bg-slate-300'
-                      " />
-                    <span class="hidden sm:inline">frpc</span>
-                  </div>
-                </template>
-                {{ t('status.frpcLabel') }}: {{ frpcRunning ? t('status.running') : t('status.stopped') }}
-              </n-tooltip>
-
-              <!-- frps status -->
-              <n-tooltip trigger="hover">
-                <template #trigger>
-                  <div class="flex items-center gap-1.5 cursor-default">
-                    <span class="w-2 h-2 rounded-full transition-all duration-500" :class="frpsRunning
-                      ? 'bg-violet-500 dot-pulse shadow-[0_0_8px_rgba(139,92,246,0.6)]'
-                      : isDark ? 'bg-slate-600' : 'bg-slate-300'
-                      " />
-                    <span class="hidden sm:inline">frps</span>
-                  </div>
-                </template>
-                {{ t('status.frpsLabel') }}: {{ frpsRunning ? t('status.running') : t('status.stopped') }}
-              </n-tooltip>
-            </div>
-
-            <!-- Separator -->
-            <div class="w-px h-4" :class="isDark ? 'bg-white/8' : 'bg-black/8'" />
-
-            <!-- Language Switcher -->
-            <n-popselect v-model:value="locale"
-              :options="[{ label: '简体中文', value: 'zh' }, { label: 'English', value: 'en' }]" trigger="click"
-              size="small">
-              <button @mousedown.stop
-                class="w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-200 cursor-pointer pointer-events-auto"
-                :class="isDark
-                  ? 'hover:bg-white/6 text-slate-400 hover:text-slate-200'
-                  : 'hover:bg-black/4 text-slate-500 hover:text-slate-700'
-                  ">
+            <n-popselect
+              v-model:value="locale"
+              :options="[{ label: '简体中文', value: 'zh' }, { label: 'English', value: 'en' }]"
+              trigger="click"
+              size="small"
+            >
+              <button
+                @mousedown.stop
+                class="w-7 h-7 rounded-lg flex items-center justify-center transition-colors duration-150 cursor-pointer pointer-events-auto"
+                :aria-label="t('dashboard.language')"
+                :style="{ color: 'var(--ops-muted)' }"
+              >
                 <Languages :size="15" />
               </button>
             </n-popselect>
 
-            <!-- Theme Toggle -->
             <n-tooltip trigger="hover">
               <template #trigger>
-                <button @click="cycleTheme" @mousedown.stop
-                  class="w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-200 cursor-pointer pointer-events-auto"
-                  :class="isDark
-                    ? 'hover:bg-white/6 text-slate-400 hover:text-slate-200'
-                    : 'hover:bg-black/4 text-slate-500 hover:text-slate-700'
-                    ">
+                <button
+                  @click="cycleTheme"
+                  @mousedown.stop
+                  class="w-7 h-7 rounded-lg flex items-center justify-center transition-colors duration-150 cursor-pointer pointer-events-auto"
+                  :aria-label="themeTooltip"
+                  :style="{ color: 'var(--ops-muted)' }"
+                >
                   <component :is="themeIcon" :size="15" />
                 </button>
               </template>
               {{ themeTooltip }}
             </n-tooltip>
 
-            <!-- Separator -->
-            <div class="w-px h-4" :class="isDark ? 'bg-white/[0.08]' : 'bg-black/[0.08]'" />
+            <div class="w-px h-4" :style="{ background: 'var(--ops-border)' }" />
 
-            <!-- Window Controls -->
-            <div class="flex items-center justify-end w-[100px] gap-1 z-50 relative pointer-events-auto"
-              @mousedown.stop>
-              <button @click.stop="handleMinimize"
-                class="w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-200 cursor-pointer pointer-events-auto"
-                :class="isDark ? 'hover:bg-white/6 text-slate-400 hover:text-slate-200' : 'hover:bg-black/4 text-slate-500 hover:text-slate-700'">
+            <div
+              class="flex items-center justify-end w-[100px] gap-1 z-50 relative pointer-events-auto"
+              @mousedown.stop
+            >
+              <button
+                @click.stop="handleMinimize"
+                class="w-7 h-7 rounded-lg flex items-center justify-center transition-colors duration-150 cursor-pointer pointer-events-auto"
+                :aria-label="t('app.minimize')"
+                :style="{ color: 'var(--ops-muted)' }"
+              >
                 <Minus :size="15" />
               </button>
-              <button @click.stop="handleMaximize"
-                class="w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-200 cursor-pointer pointer-events-auto"
-                :class="isDark ? 'hover:bg-white/6 text-slate-400 hover:text-slate-200' : 'hover:bg-black/4 text-slate-500 hover:text-slate-700'">
+              <button
+                @click.stop="handleMaximize"
+                class="w-7 h-7 rounded-lg flex items-center justify-center transition-colors duration-150 cursor-pointer pointer-events-auto"
+                :aria-label="t('app.maximize')"
+                :style="{ color: 'var(--ops-muted)' }"
+              >
                 <Maximize2 :size="14" />
               </button>
-              <button @click.stop="handleClose"
-                class="w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-200 cursor-pointer hover:bg-red-500 hover:text-white pointer-events-auto"
-                :class="isDark ? 'text-slate-400' : 'text-slate-500'">
+              <button
+                @click.stop="handleClose"
+                class="w-7 h-7 rounded-lg flex items-center justify-center transition-colors duration-150 cursor-pointer hover:bg-red-600 hover:text-white pointer-events-auto"
+                :aria-label="t('app.closeApp')"
+                :style="{ color: 'var(--ops-muted)' }"
+              >
                 <X :size="16" />
               </button>
             </div>
           </div>
         </header>
 
-        <!-- Main Content Area -->
-        <main class="flex-1 overflow-auto relative selection:bg-emerald-500/30 grid-bg">
-          <router-view />
-        </main>
+        <AppShell />
       </n-dialog-provider>
     </n-message-provider>
   </n-config-provider>

@@ -1,115 +1,126 @@
-// Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-mod config_parser;
-mod process_manager;
+mod adapters;
+mod commands;
+mod domain;
+mod services;
 
-#[tauri::command]
-fn export_deploy_script(path: &str, toml_content: &str) -> Result<(), String> {
-    let dir = std::path::Path::new(path);
-    std::fs::write(dir.join("frps.toml"), toml_content).map_err(|e| e.to_string())?;
-    
-    let sh_content = format!(r#"#!/bin/bash
-echo "Installing frps..."
-mkdir -p /etc/frp
-cp frps.toml /etc/frp/frps.toml
-wget https://github.com/fatedier/frp/releases/download/v0.61.1/frp_0.61.1_linux_amd64.tar.gz -O /tmp/frp.tar.gz
-tar -zxvf /tmp/frp.tar.gz -C /tmp
-cp /tmp/frp_0.61.1_linux_amd64/frps /usr/bin/frps
-chmod +x /usr/bin/frps
+use std::sync::Arc;
 
-cat <<EOF > /etc/systemd/system/frps.service
-[Unit]
-Description=Frp Server Service
-After=network.target
+use adapters::event_sink::{CompositeEventSink, EventSink, TauriEventSink};
+use adapters::filesystem::{map_config_io, AppPaths, RealConfigFilesystem};
+use adapters::frp_admin::{FrpAdminAdapter, HealthProbe};
+use adapters::sidecar::{SidecarAdapter, TauriSidecarAdapter};
+use services::app_settings::AppSettingsStore;
+use services::config_repository::ConfigRepository;
+use services::config_transaction::ConfigTransactionService;
+use services::diagnostics_service::DiagnosticsService;
+use services::log_service::{FileLogSink, LogService};
+use services::process_supervisor::{ProcessSupervisor, SupervisorTiming};
+use services::shutdown_coordinator::ShutdownCoordinator;
+use tauri::Manager;
 
-[Service]
-Type=simple
-User=nobody
-Restart=on-failure
-RestartSec=5s
-ExecStart=/usr/bin/frps -c /etc/frp/frps.toml
-LimitNOFILE=1048576
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-systemctl daemon-reload
-systemctl enable frps
-systemctl start frps
-echo "Frps installed and started successfully!"
-"#);
-    std::fs::write(dir.join("install.sh"), sh_content).map_err(|e| e.to_string())?;
-    Ok(())
-}
-
-/// 导出日志文件到用户指定目录
-#[tauri::command]
-fn export_logs(app: tauri::AppHandle, path: String) -> Result<String, String> {
-    let config_dir = config_parser::get_config_dir(&app)?;
-    let log_dir = config_dir.join("logs");
-
-    if !log_dir.exists() {
-        return Err("暂无日志文件".to_string());
-    }
-
-    let dest = std::path::Path::new(&path);
-    let mut count = 0u32;
-
-    // 遍历日志目录，复制所有 .log 文件
-    let entries = std::fs::read_dir(&log_dir).map_err(|e| format!("读取日志目录失败: {}", e))?;
-    for entry in entries.flatten() {
-        let file_path = entry.path();
-        if file_path.extension().and_then(|ext| ext.to_str()) == Some("log") {
-            let file_name = entry.file_name();
-            std::fs::copy(&file_path, dest.join(&file_name))
-                .map_err(|e| format!("复制日志文件失败: {}", e))?;
-            count += 1;
-        }
-    }
-
-    if count == 0 {
-        return Err("暂无日志文件".to_string());
-    }
-
-    Ok(format!("成功导出 {} 个日志文件", count))
-}
-
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from Rust!", name)
+pub struct AppServices {
+    pub paths: AppPaths,
+    pub config: Arc<ConfigRepository>,
+    pub settings: Arc<AppSettingsStore>,
+    pub logs: Arc<LogService>,
+    pub processes: Arc<ProcessSupervisor>,
+    pub transactions: Arc<ConfigTransactionService>,
+    pub shutdown: Arc<ShutdownCoordinator>,
+    pub frp_admin: Arc<FrpAdminAdapter>,
+    pub diagnostics: Arc<DiagnosticsService>,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .manage(process_manager::AppState {
-            frpc_process: std::sync::Mutex::new(None),
-            frps_process: std::sync::Mutex::new(None),
-        })
+        .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            Some(vec!["--minimized"]),
+        ))
+        .plugin(tauri_plugin_opener::init())
         .setup(|app| {
-            use tauri::Manager;
             use tauri::menu::{Menu, MenuItem};
-            let quit_i = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
-            let show_i = MenuItem::with_id(app, "show", "显示主界面", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&show_i, &quit_i])?;
 
-            tauri::tray::TrayIconBuilder::new()
+            let app_handle = app.handle().clone();
+            let paths = AppPaths::from_app(&app_handle)?;
+            std::fs::create_dir_all(&paths.config_dir).map_err(map_config_io)?;
+
+            let filesystem = Arc::new(RealConfigFilesystem);
+            let config = Arc::new(ConfigRepository::new(paths.clone(), filesystem));
+            let settings = Arc::new(AppSettingsStore::load_or_default(&paths)?);
+            let logs = Arc::new(LogService::new(paths.clone(), settings.clone()));
+            let events: Arc<dyn EventSink> = Arc::new(CompositeEventSink::new(vec![
+                Box::new(TauriEventSink::new(app_handle.clone())),
+                Box::new(FileLogSink::new(logs.clone())),
+            ]));
+            let sidecar: Arc<dyn SidecarAdapter> =
+                Arc::new(TauriSidecarAdapter::new(app_handle.clone()));
+            let frp_admin = Arc::new(FrpAdminAdapter::new()?);
+            let health: Arc<dyn HealthProbe> = frp_admin.clone();
+            let processes = Arc::new(ProcessSupervisor::new(
+                config.clone(),
+                sidecar.clone(),
+                health.clone(),
+                events.clone(),
+                SupervisorTiming::default(),
+            ));
+            let transactions = Arc::new(ConfigTransactionService::new(
+                config.clone(),
+                processes.clone(),
+                events,
+            ));
+            let shutdown = Arc::new(ShutdownCoordinator::new(processes.clone()));
+            let diagnostics = Arc::new(DiagnosticsService::new(
+                paths.clone(),
+                config.clone(),
+                settings.clone(),
+                sidecar,
+                health,
+                processes.clone(),
+                env!("CARGO_PKG_VERSION"),
+            ));
+            app.manage(AppServices {
+                paths,
+                config,
+                settings,
+                logs,
+                processes,
+                transactions,
+                shutdown,
+                frp_admin,
+                diagnostics,
+            });
+
+            let quit_item = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
+            let show_item = MenuItem::with_id(app, "show", "显示主界面", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&show_item, &quit_item])?;
+            let mut tray = tauri::tray::TrayIconBuilder::new()
                 .tooltip("Frp Desktop Plus")
                 .menu(&menu)
-                .icon(app.default_window_icon().unwrap().clone())
-                .on_menu_event(|app: &tauri::AppHandle, event: tauri::menu::MenuEvent| match event.id.as_ref() {
-                    "quit" => {
-                        std::process::exit(0);
-                    }
-                    "show" => {
-                        if let Some(window) = app.get_webview_window("main") {
-                            let _ = window.show();
-                            let _ = window.set_focus();
+                .on_menu_event(
+                    |app: &tauri::AppHandle, event: tauri::menu::MenuEvent| match event.id.as_ref()
+                    {
+                        "quit" => {
+                            let app = app.clone();
+                            let shutdown = app.state::<AppServices>().shutdown.clone();
+                            tauri::async_runtime::spawn(async move {
+                                if let Err(error) = shutdown.prepare().await {
+                                    eprintln!("shutdown preparation failed: {error}");
+                                }
+                                app.exit(0);
+                            });
                         }
-                    }
-                    _ => {}
-                })
+                        "show" => {
+                            if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.show();
+                                let _ = window.set_focus();
+                            }
+                        }
+                        _ => {}
+                    },
+                )
                 .on_tray_icon_event(|tray, event| {
                     use tauri::tray::TrayIconEvent;
                     if let TrayIconEvent::Click {
@@ -123,33 +134,58 @@ pub fn run() {
                             let _ = window.set_focus();
                         }
                     }
-                })
-                .build(app)?;
+                });
+            if let Some(icon) = app.default_window_icon() {
+                tray = tray.icon(icon.clone());
+            }
+            tray.build(app)?;
             Ok(())
         })
-        .plugin(tauri_plugin_shell::init())
-        .plugin(tauri_plugin_autostart::init(
-            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
-            Some(vec!["--minimized"]),
-        ))
-        .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
-            greet,
-            config_parser::read_frpc_config,
-            config_parser::save_frpc_config,
-            config_parser::read_frps_config,
-            config_parser::save_frps_config,
-            process_manager::start_frpc,
-            process_manager::stop_frpc,
-            process_manager::start_frps,
-            process_manager::stop_frps,
-            process_manager::get_frpc_status,
-            process_manager::get_frps_status,
-            process_manager::get_frpc_traffic,
-            export_deploy_script,
-            export_logs,
+            commands::config::get_config_snapshot,
+            commands::config::validate_config_source,
+            commands::config::preview_config_change,
+            commands::config::apply_config_change,
+            commands::config::restore_config_backup,
+            commands::config::save_config_and_restart,
+            commands::process::get_process_snapshot,
+            commands::process::start_process,
+            commands::process::stop_process,
+            commands::process::restart_process,
+            commands::process::stop_all_processes,
+            commands::process::prepare_shutdown,
+            commands::support::export_logs,
+            commands::support::export_deploy_script,
+            commands::support::get_frpc_traffic,
+            commands::logs::delete_disk_logs,
+            commands::settings::get_app_settings,
+            commands::settings::update_app_settings,
+            commands::settings::apply_local_monitor,
+            commands::diagnostics::run_diagnostics,
+            commands::diagnostics::export_diagnostics_pack,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
-}
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application");
 
+    app.run(|app_handle, event| match event {
+        tauri::RunEvent::ExitRequested { api, .. } => {
+            let shutdown = app_handle.state::<AppServices>().shutdown.clone();
+            if !shutdown.is_completed() {
+                api.prevent_exit();
+                let app_handle = app_handle.clone();
+                tauri::async_runtime::spawn(async move {
+                    if let Err(error) = shutdown.prepare().await {
+                        eprintln!("shutdown preparation failed: {error}");
+                    }
+                    app_handle.exit(0);
+                });
+            }
+        }
+        tauri::RunEvent::Exit => {
+            if !app_handle.state::<AppServices>().shutdown.is_completed() {
+                eprintln!("application exited before shutdown preparation completed");
+            }
+        }
+        _ => {}
+    });
+}
