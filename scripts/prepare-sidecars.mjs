@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import {
+  chmodSync,
   copyFileSync,
   createWriteStream,
   existsSync,
@@ -199,6 +200,16 @@ function canSmokeVersion(triple) {
   return resolveHostTriple() === triple
 }
 
+/** Git checkout on Linux/macOS often drops +x; ensure host can smoke-test binaries. */
+function ensureExecutable(filePath, triple) {
+  if (isWindowsTriple(triple) || process.platform === 'win32') return
+  try {
+    chmodSync(filePath, 0o755)
+  } catch (error) {
+    fail(`Failed to chmod +x ${filePath}: ${error.message}`)
+  }
+}
+
 function smokeVersion(filePath, frpVersion) {
   const result = spawnSync(filePath, ['--version'], {
     encoding: 'utf8',
@@ -245,6 +256,9 @@ async function prepareTarget(triple, manifest) {
   }
 
   if (pending.length === 0) {
+    for (const kind of KINDS) {
+      ensureExecutable(destPath(kind, triple), triple)
+    }
     if (canSmokeVersion(triple)) {
       for (const kind of KINDS) {
         smokeVersion(destPath(kind, triple), manifest.frpVersion)
@@ -297,6 +311,7 @@ async function prepareTarget(triple, manifest) {
           )
         }
 
+        ensureExecutable(dest, triple)
         console.log(`  placed ${destFileName(kind, triple)} (${placed})`)
         refreshed.push(kind)
       }
@@ -305,6 +320,9 @@ async function prepareTarget(triple, manifest) {
     safeRm(workRoot)
   }
 
+  for (const kind of KINDS) {
+    ensureExecutable(destPath(kind, triple), triple)
+  }
   if (canSmokeVersion(triple)) {
     for (const kind of KINDS) {
       smokeVersion(destPath(kind, triple), manifest.frpVersion)
