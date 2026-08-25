@@ -183,10 +183,10 @@ pub fn run() {
                 });
             }
         }
-        tauri::RunEvent::Exit => {
-            if !app_handle.state::<AppServices>().shutdown.is_completed() {
-                eprintln!("application exited before shutdown preparation completed");
-            }
+        tauri::RunEvent::Exit
+            if !app_handle.state::<AppServices>().shutdown.is_completed() =>
+        {
+            eprintln!("application exited before shutdown preparation completed");
         }
         _ => {}
     });
